@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "deny": []
+  },
+  "pluginMarketplaces": [
+    {
+      "name": "claude-code-plugins",
+      "url": "https://github.com/anthropics/claude-code",
+      "description": "Anthropic's official plugin collection — vetted, maintained, safe to use"
+    },
+    {
+      "name": "anthropic-agent-skills",
+      "url": "https://github.com/anthropics/skills",
+      "description": "Document processing skills (PDF, DOCX, XLSX, PPTX) and more"
+    },
+    {
+      "name": "claude-plugins-official",
+      "url": "https://github.com/anthropics/claude-code",
+      "description": "Additional official plugins — Stripe, frontend design, Playwright"
+    }
+  ]
+}
