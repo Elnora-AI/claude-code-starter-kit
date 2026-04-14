@@ -1,29 +1,95 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Read",
+      "Edit",
+      "Write",
       "Glob",
       "Grep",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "Task",
+      "NotebookEdit",
+      "Monitor",
+      "Bash(*)"
     ],
-    "deny": []
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease*)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git checkout -- .)",
+      "Bash(git stash drop*)",
+      "Bash(git stash clear*)",
+      "Bash(rm -rf *)",
+      "Bash(del /s /q *)",
+      "Bash(rmdir /s /q *)",
+      "Bash(Remove-Item * -Recurse*)",
+      "Bash(Remove-Item * -Force*)",
+      "Bash(docker system prune*)",
+      "Bash(docker volume rm*)",
+      "Bash(docker volume prune*)",
+      "Bash(shutdown*)",
+      "Bash(restart*)"
+    ]
   },
-  "pluginMarketplaces": [
-    {
-      "name": "claude-code-plugins",
-      "url": "https://github.com/anthropics/claude-code",
-      "description": "Anthropic's official plugin collection — vetted, maintained, safe to use"
+  "hooks": {},
+  "enabledPlugins": {
+    "feature-dev@claude-code-plugins": true,
+    "code-review@claude-code-plugins": true,
+    "commit-commands@claude-code-plugins": true,
+    "hookify@claude-code-plugins": true,
+    "plugin-dev@claude-code-plugins": true,
+    "ralph-wiggum@claude-code-plugins": true,
+    "security-guidance@claude-code-plugins": true,
+    "security-compliance@claude-code-workflows": true,
+    "security-scanning@claude-code-workflows": true,
+    "code-documentation@claude-code-workflows": true,
+    "agent-orchestration@claude-code-workflows": true,
+    "business-analytics@claude-code-workflows": true,
+    "codebase-cleanup@claude-code-workflows": true,
+    "conductor@claude-code-workflows": true,
+    "content-marketing@claude-code-workflows": true,
+    "context-management@claude-code-workflows": true,
+    "customer-sales-automation@claude-code-workflows": true,
+    "hr-legal-compliance@claude-code-workflows": true,
+    "git-pr-workflows@claude-code-workflows": true,
+    "seo-analysis-monitoring@claude-code-workflows": true,
+    "seo-content-creation@claude-code-workflows": true,
+    "seo-technical-optimization@claude-code-workflows": true,
+    "team-collaboration@claude-code-workflows": true,
+    "ui-design@claude-code-workflows": true,
+    "claude-md-management@claude-plugins-official": true,
+    "document-skills@anthropic-agent-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/anthropics/claude-code.git"
+      }
     },
-    {
-      "name": "anthropic-agent-skills",
-      "url": "https://github.com/anthropics/skills",
-      "description": "Document processing skills (PDF, DOCX, XLSX, PPTX) and more"
+    "claude-code-workflows": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/wshobson/agents.git"
+      }
     },
-    {
-      "name": "claude-plugins-official",
-      "url": "https://github.com/anthropics/claude-code",
-      "description": "Additional official plugins — Stripe, frontend design, Playwright"
+    "claude-plugins-official": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/anthropics/claude-plugins-official.git"
+      }
+    },
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/anthropics/skills.git"
+      }
     }
-  ]
+  }
 }
