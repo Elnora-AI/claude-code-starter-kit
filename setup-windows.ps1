@@ -18,6 +18,24 @@ $ErrorActionPreference = "Continue"
 
 $FailedSteps = New-Object System.Collections.ArrayList
 
+function Update-SessionPath {
+    # Reload PATH from the registry so this session sees binaries added by a
+    # just-run installer. Without this, `winget install Git.Git` succeeds but
+    # `Get-Command git` still fails until the user restarts PowerShell —
+    # which would make the git-config block (and the verify summary) wrong.
+    $machine = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user    = [System.Environment]::GetEnvironmentVariable("Path", "User")
+    $parts   = @()
+    if ($machine) { $parts += $machine }
+    if ($user)    { $parts += $user }
+    # Claude Code installer writes to %USERPROFILE%\.local\bin — ensure it's present.
+    $claudeBin = Join-Path $env:USERPROFILE ".local\bin"
+    if ((Test-Path $claudeBin) -and ($parts -notcontains $claudeBin)) {
+        $parts += $claudeBin
+    }
+    $env:Path = ($parts -join ";")
+}
+
 function Invoke-Step {
     # Runs a scriptblock, catches any exception or non-zero exit code,
     # records the failure, and continues.
@@ -56,7 +74,7 @@ if (-not $hasWinget) {
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "[1/8] Installing Node.js..." -ForegroundColor Green
     Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
-    Write-Host "  Restart PowerShell for 'node' to be on PATH." -ForegroundColor Yellow
+    Update-SessionPath
 } else {
     Write-Host "[1/8] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
 }
@@ -65,7 +83,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "[2/8] Installing Git..." -ForegroundColor Green
     Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements }
-    Write-Host "  Restart PowerShell for 'git' to be on PATH." -ForegroundColor Yellow
+    Update-SessionPath
 } else {
     Write-Host "[2/8] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
 }
@@ -91,7 +109,7 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "[3/8] Installing Python 3.12..." -ForegroundColor Green
     Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --version 3.12.10 --accept-package-agreements --accept-source-agreements }
-    Write-Host "  Restart PowerShell for 'python' to be on PATH." -ForegroundColor Yellow
+    Update-SessionPath
 } else {
     Write-Host "[3/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
@@ -106,6 +124,7 @@ $codeInstalled = (Get-Command code -ErrorAction SilentlyContinue) -or ($codePath
 if (-not $codeInstalled) {
     Write-Host "[4/8] Installing VS Code..." -ForegroundColor Green
     Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
+    Update-SessionPath
 } else {
     Write-Host "[4/8] VS Code already installed. Skipping." -ForegroundColor Gray
 }
@@ -114,7 +133,7 @@ if (-not $codeInstalled) {
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "[5/8] Installing Claude Code..." -ForegroundColor Green
     Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
-    Write-Host "  If 'claude' is not found after this, add %USERPROFILE%\.local\bin to PATH and restart VS Code." -ForegroundColor Yellow
+    Update-SessionPath
 } else {
     Write-Host "[5/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
 }
@@ -123,7 +142,7 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Host "[6/8] Installing GitHub CLI..." -ForegroundColor Green
     Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
-    Write-Host "  Restart PowerShell for 'gh' to be on PATH." -ForegroundColor Yellow
+    Update-SessionPath
 } else {
     Write-Host "[6/8] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
 }
@@ -133,6 +152,7 @@ $obsidianPath = "$env:LOCALAPPDATA\Obsidian\Obsidian.exe"
 if (-not (Test-Path $obsidianPath)) {
     Write-Host "[7/8] Installing Obsidian (optional)..." -ForegroundColor Green
     Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
+    Update-SessionPath
 } else {
     Write-Host "[7/8] Obsidian already installed. Skipping." -ForegroundColor Gray
 }
@@ -157,14 +177,52 @@ Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "  Setup complete!" -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  IMPORTANT: Restart PowerShell (or VS Code) so PATH changes take effect." -ForegroundColor Yellow
+Update-SessionPath
+
+function Get-ToolVersion {
+    param([string]$Name, [string]$VersionArg = "--version")
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $cmd) { return "not found" }
+    try {
+        $out = & $Name $VersionArg 2>$null | Select-Object -First 1
+        if ($out) { return $out } else { return "installed" }
+    } catch {
+        return "installed"
+    }
+}
+
+function Get-AppInstalled {
+    param([string]$Path, [string]$Label)
+    if (Test-Path $Path) {
+        try {
+            $v = (Get-Item $Path).VersionInfo.ProductVersion
+            if ($v) { return "installed ($v)" } else { return "installed" }
+        } catch { return "installed" }
+    } else {
+        return "not found"
+    }
+}
+
+Write-Host "  Node.js:     $(Get-ToolVersion 'node')" -ForegroundColor White
+Write-Host "  Git:         $(Get-ToolVersion 'git')" -ForegroundColor White
+Write-Host "  Python:      $(Get-ToolVersion 'python')" -ForegroundColor White
+
+$vscodeExe = @(
+    "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+    "$env:ProgramFiles\Microsoft VS Code\Code.exe",
+    "${env:ProgramFiles(x86)}\Microsoft VS Code\Code.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($vscodeExe) {
+    Write-Host "  VS Code:     $(Get-AppInstalled $vscodeExe 'VS Code')" -ForegroundColor White
+} else {
+    Write-Host "  VS Code:     $(Get-ToolVersion 'code')" -ForegroundColor White
+}
+
+Write-Host "  Claude Code: $(Get-ToolVersion 'claude')" -ForegroundColor White
+Write-Host "  GitHub CLI:  $(Get-ToolVersion 'gh')" -ForegroundColor White
+Write-Host "  Obsidian:    $(Get-AppInstalled "$env:LOCALAPPDATA\Obsidian\Obsidian.exe" 'Obsidian')" -ForegroundColor White
 Write-Host ""
-Write-Host "  Verify:" -ForegroundColor White
-Write-Host "    node --version" -ForegroundColor Gray
-Write-Host "    git --version" -ForegroundColor Gray
-Write-Host "    python --version" -ForegroundColor Gray
-Write-Host "    claude --version" -ForegroundColor Gray
-Write-Host "    gh --version" -ForegroundColor Gray
+Write-Host "  Note: if anything shows 'not found' above, open a new PowerShell/VS Code window and re-check." -ForegroundColor Gray
 Write-Host ""
 
 if ($FailedSteps.Count -gt 0) {

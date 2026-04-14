@@ -149,12 +149,49 @@ echo "==========================================="
 echo "  Setup complete!"
 echo "==========================================="
 echo ""
+# Refresh shell command lookup cache so newly-installed binaries are visible.
+hash -r 2>/dev/null || true
+
+# VS Code: `code` may not be on PATH until the user runs
+# "Shell Command: Install 'code' command in PATH" from VS Code's palette.
+# Check for the .app bundle as a fallback so the summary isn't misleading.
+vscode_version() {
+    if command -v code &> /dev/null; then
+        code --version 2>/dev/null | head -1
+    elif [ -d "/Applications/Visual Studio Code.app" ]; then
+        local plist="/Applications/Visual Studio Code.app/Contents/Info.plist"
+        if [ -f "$plist" ]; then
+            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist" 2>/dev/null \
+                | awk '{print "installed (" $0 ") — run \"Shell Command: Install code command in PATH\" from VS Code"}'
+        else
+            echo "installed — run \"Shell Command: Install code command in PATH\" from VS Code"
+        fi
+    else
+        echo "not found"
+    fi
+}
+
+obsidian_version() {
+    if [ -d "/Applications/Obsidian.app" ]; then
+        local plist="/Applications/Obsidian.app/Contents/Info.plist"
+        if [ -f "$plist" ]; then
+            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist" 2>/dev/null \
+                | awk '{print "installed (" $0 ")"}'
+        else
+            echo "installed"
+        fi
+    else
+        echo "not found"
+    fi
+}
+
 echo "  Node.js:     $(node --version 2>/dev/null || echo 'not found')"
 echo "  Git:         $(git --version 2>/dev/null || echo 'not found')"
 echo "  Python:      $(python3 --version 2>/dev/null || echo 'not found')"
-echo "  VS Code:     $(code --version 2>/dev/null | head -1 || echo 'not found')"
+echo "  VS Code:     $(vscode_version)"
 echo "  Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
 echo "  GitHub CLI:  $(gh --version 2>/dev/null | head -1 || echo 'not found')"
+echo "  Obsidian:    $(obsidian_version)"
 echo ""
 
 if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
