@@ -13,10 +13,7 @@ Update this file as you add or remove tools so Claude always knows what's availa
 |--------|-----------------|
 | **commit-commands** | `/commit` and `/commit-push-pr` slash commands for Git workflow |
 | **feature-dev** | Guided feature development with codebase understanding |
-| **code-review** | Code review command for pull requests |
-| **hookify** | Create rules to prevent unwanted Claude behaviors |
 | **plugin-dev** | Tools for creating your own plugins |
-| **ralph-wiggum** | Brainstorming and creative thinking techniques |
 | **security-guidance** | Security best practices and vulnerability checks |
 
 ### From claude-code-workflows (Community)
@@ -26,20 +23,8 @@ Update this file as you add or remove tools so Claude always knows what's availa
 | **security-compliance** | Security compliance auditing |
 | **security-scanning** | SAST, threat modeling, and security hardening |
 | **code-documentation** | Technical documentation and tutorial generation |
-| **agent-orchestration** | Context management for multi-agent workflows |
 | **business-analytics** | KPI dashboards and data storytelling |
-| **codebase-cleanup** | Test automation and code review |
-| **conductor** | Project management with tracks and phased implementation |
-| **content-marketing** | Content strategy, SEO, and distribution |
-| **context-management** | Dynamic context and knowledge graph management |
-| **customer-sales-automation** | Customer support and sales automation |
 | **hr-legal-compliance** | HR, legal docs, and GDPR compliance |
-| **git-pr-workflows** | Git workflow from review through PR creation |
-| **seo-analysis-monitoring** | SEO auditing, authority building, cannibalization detection |
-| **seo-content-creation** | SEO content writing, planning, and auditing |
-| **seo-technical-optimization** | Meta tags, keywords, schema markup, snippets |
-| **team-collaboration** | Developer experience optimization |
-| **ui-design** | Component design, accessibility, design systems |
 
 ### From claude-plugins-official (Anthropic Extras)
 
