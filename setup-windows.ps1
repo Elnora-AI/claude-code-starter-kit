@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # Claude Code Setup — Windows
 # ============================================================
 # Installs everything from the AI Agent Workshop Installation Guide.
@@ -148,8 +148,20 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 }
 
 # --- [7/8] Obsidian (optional — knowledge base) ---
-$obsidianPath = "$env:LOCALAPPDATA\Obsidian\Obsidian.exe"
-if (-not (Test-Path $obsidianPath)) {
+$obsidianPaths = @(
+    "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
+    "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
+    "$env:APPDATA\Obsidian\Obsidian.exe",
+    "$env:ProgramFiles\Obsidian\Obsidian.exe",
+    "${env:ProgramFiles(x86)}\Obsidian\Obsidian.exe"
+)
+$obsidianInstalled = [bool]($obsidianPaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
+if (-not $obsidianInstalled) {
+    # Fall back to winget — catches installs in non-standard locations.
+    $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
+    if ($wingetHas) { $obsidianInstalled = $true }
+}
+if (-not $obsidianInstalled) {
     Write-Host "[7/8] Installing Obsidian (optional)..." -ForegroundColor Green
     Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
@@ -220,7 +232,23 @@ if ($vscodeExe) {
 
 Write-Host "  Claude Code: $(Get-ToolVersion 'claude')" -ForegroundColor White
 Write-Host "  GitHub CLI:  $(Get-ToolVersion 'gh')" -ForegroundColor White
-Write-Host "  Obsidian:    $(Get-AppInstalled "$env:LOCALAPPDATA\Obsidian\Obsidian.exe" 'Obsidian')" -ForegroundColor White
+$obsidianExe = @(
+    "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
+    "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
+    "$env:APPDATA\Obsidian\Obsidian.exe",
+    "$env:ProgramFiles\Obsidian\Obsidian.exe",
+    "${env:ProgramFiles(x86)}\Obsidian\Obsidian.exe"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($obsidianExe) {
+    Write-Host "  Obsidian:    $(Get-AppInstalled $obsidianExe 'Obsidian')" -ForegroundColor White
+} else {
+    $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
+    if ($wingetHas) {
+        Write-Host "  Obsidian:    installed (winget)" -ForegroundColor White
+    } else {
+        Write-Host "  Obsidian:    not found" -ForegroundColor White
+    }
+}
 Write-Host ""
 Write-Host "  Note: if anything shows 'not found' above, open a new PowerShell/VS Code window and re-check." -ForegroundColor Gray
 Write-Host ""
