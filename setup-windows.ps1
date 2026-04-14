@@ -5,7 +5,38 @@
 # Run from PowerShell:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\setup-windows.ps1
+#
+# Error handling: the script CONTINUES on failure. Each step is
+# isolated — if one install fails (network, winget glitch, broken
+# manifest, etc.), remaining steps still run, and a summary of
+# failures is printed at the end.
 # ============================================================
+
+# Non-terminating errors don't stop the script (this is the PS default,
+# but being explicit for clarity).
+$ErrorActionPreference = "Continue"
+
+$FailedSteps = New-Object System.Collections.ArrayList
+
+function Invoke-Step {
+    # Runs a scriptblock, catches any exception or non-zero exit code,
+    # records the failure, and continues.
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][scriptblock]$Action
+    )
+    try {
+        & $Action
+        if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            Write-Host "  [!] $Label failed (exit $LASTEXITCODE) — continuing." -ForegroundColor Red
+            [void]$FailedSteps.Add($Label)
+            $global:LASTEXITCODE = 0
+        }
+    } catch {
+        Write-Host "  [!] $Label failed: $($_.Exception.Message) — continuing." -ForegroundColor Red
+        [void]$FailedSteps.Add($Label)
+    }
+}
 
 Write-Host ""
 Write-Host "===========================================" -ForegroundColor Cyan
@@ -24,8 +55,8 @@ if (-not $hasWinget) {
 # --- [1/8] Node.js ---
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "[1/8] Installing Node.js..." -ForegroundColor Green
-    winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done. Restart PowerShell for 'node' to be on PATH." -ForegroundColor Yellow
+    Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
+    Write-Host "  Restart PowerShell for 'node' to be on PATH." -ForegroundColor Yellow
 } else {
     Write-Host "[1/8] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
 }
@@ -33,25 +64,34 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 # --- [2/8] Git + user config ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "[2/8] Installing Git..." -ForegroundColor Green
-    winget install Git.Git --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done. Restart PowerShell for 'git' to be on PATH." -ForegroundColor Yellow
+    Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements }
+    Write-Host "  Restart PowerShell for 'git' to be on PATH." -ForegroundColor Yellow
 } else {
     Write-Host "[2/8] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
 }
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
-    $gitName  = git config --global user.name
-    $gitEmail = git config --global user.email
-    if (-not $gitName)  { $gitName  = Read-Host "  Enter your full name for git commits"; git config --global user.name  "$gitName" }
-    if (-not $gitEmail) { $gitEmail = Read-Host "  Enter your email for git commits";     git config --global user.email "$gitEmail" }
-    Write-Host "  git user: $(git config --global user.name) <$(git config --global user.email)>" -ForegroundColor Gray
+    try {
+        $gitName  = git config --global user.name
+        $gitEmail = git config --global user.email
+        if (-not $gitName)  { $gitName  = Read-Host "  Enter your full name for git commits"; if ($gitName)  { git config --global user.name  "$gitName" } }
+        if (-not $gitEmail) { $gitEmail = Read-Host "  Enter your email for git commits";     if ($gitEmail) { git config --global user.email "$gitEmail" } }
+        Write-Host "  git user: $(git config --global user.name) <$(git config --global user.email)>" -ForegroundColor Gray
+        $defBranch = git config --global init.defaultBranch
+        if (-not $defBranch) { git config --global init.defaultBranch main; Write-Host "  git init.defaultBranch: main" -ForegroundColor Gray }
+    } catch {
+        Write-Host "  [!] Git configuration step hit an error: $($_.Exception.Message) — continuing." -ForegroundColor Red
+        [void]$FailedSteps.Add("Git config")
+    }
+} else {
+    Write-Host "  [!] git not available — skipping git config." -ForegroundColor Red
 }
 
 # --- [3/8] Python 3.12 ---
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "[3/8] Installing Python 3.12..." -ForegroundColor Green
-    winget install Python.Python.3.12 --version 3.12.10 --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done. Restart PowerShell for 'python' to be on PATH." -ForegroundColor Yellow
+    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --version 3.12.10 --accept-package-agreements --accept-source-agreements }
+    Write-Host "  Restart PowerShell for 'python' to be on PATH." -ForegroundColor Yellow
 } else {
     Write-Host "[3/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
@@ -65,8 +105,7 @@ $codePaths = @(
 $codeInstalled = (Get-Command code -ErrorAction SilentlyContinue) -or ($codePaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
 if (-not $codeInstalled) {
     Write-Host "[4/8] Installing VS Code..." -ForegroundColor Green
-    winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done." -ForegroundColor Yellow
+    Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
 } else {
     Write-Host "[4/8] VS Code already installed. Skipping." -ForegroundColor Gray
 }
@@ -74,7 +113,7 @@ if (-not $codeInstalled) {
 # --- [5/8] Claude Code CLI ---
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "[5/8] Installing Claude Code..." -ForegroundColor Green
-    irm https://claude.ai/install.ps1 | iex
+    Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
     Write-Host "  If 'claude' is not found after this, add %USERPROFILE%\.local\bin to PATH and restart VS Code." -ForegroundColor Yellow
 } else {
     Write-Host "[5/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
@@ -83,8 +122,8 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 # --- [6/8] GitHub CLI ---
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Host "[6/8] Installing GitHub CLI..." -ForegroundColor Green
-    winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done. Restart PowerShell for 'gh' to be on PATH." -ForegroundColor Yellow
+    Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
+    Write-Host "  Restart PowerShell for 'gh' to be on PATH." -ForegroundColor Yellow
 } else {
     Write-Host "[6/8] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
 }
@@ -93,8 +132,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 $obsidianPath = "$env:LOCALAPPDATA\Obsidian\Obsidian.exe"
 if (-not (Test-Path $obsidianPath)) {
     Write-Host "[7/8] Installing Obsidian (optional)..." -ForegroundColor Green
-    winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements
-    Write-Host "  Done." -ForegroundColor Yellow
+    Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
 } else {
     Write-Host "[7/8] Obsidian already installed. Skipping." -ForegroundColor Gray
 }
@@ -103,8 +141,13 @@ if (-not (Test-Path $obsidianPath)) {
 $projectsDir = "$env:USERPROFILE\Documents\Projects"
 if (-not (Test-Path $projectsDir)) {
     Write-Host "[8/8] Creating Projects folder at $projectsDir..." -ForegroundColor Green
-    New-Item -ItemType Directory -Path $projectsDir | Out-Null
-    Write-Host "  Done." -ForegroundColor Yellow
+    try {
+        New-Item -ItemType Directory -Path $projectsDir -ErrorAction Stop | Out-Null
+        Write-Host "  Done." -ForegroundColor Yellow
+    } catch {
+        Write-Host "  [!] Could not create $projectsDir : $($_.Exception.Message) — continuing." -ForegroundColor Red
+        [void]$FailedSteps.Add("Projects folder")
+    }
 } else {
     Write-Host "[8/8] Projects folder already exists. Skipping." -ForegroundColor Gray
 }
@@ -123,6 +166,18 @@ Write-Host "    python --version" -ForegroundColor Gray
 Write-Host "    claude --version" -ForegroundColor Gray
 Write-Host "    gh --version" -ForegroundColor Gray
 Write-Host ""
+
+if ($FailedSteps.Count -gt 0) {
+    Write-Host "-------------------------------------------" -ForegroundColor Yellow
+    Write-Host "  ⚠  $($FailedSteps.Count) step(s) failed:" -ForegroundColor Yellow
+    foreach ($step in $FailedSteps) {
+        Write-Host "     - $step" -ForegroundColor Yellow
+    }
+    Write-Host "  Re-run this script to retry, or install the failed items manually." -ForegroundColor Yellow
+    Write-Host "-------------------------------------------" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 Write-Host "Next steps (interactive — these need your browser/input):" -ForegroundColor White
 Write-Host "  1. Authenticate Claude Code:  claude          (log in, then /exit)"
 Write-Host "  2. Authenticate GitHub CLI:   gh auth login   (GitHub.com -> HTTPS -> browser)"
@@ -137,3 +192,6 @@ Write-Host "       robocopy temp-starter . /E /XD .git"
 Write-Host "       Remove-Item temp-starter -Recurse -Force"
 Write-Host "  6. (Optional) Create an Obsidian vault inside your OneDrive\knowledge-base folder."
 Write-Host ""
+
+# Exit 0 even if some steps failed — summary above tells the user what to fix.
+exit 0
