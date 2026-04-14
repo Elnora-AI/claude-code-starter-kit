@@ -7,25 +7,70 @@ Update this file as you add or remove tools so Claude always knows what's availa
 
 ## Installed Plugins
 
-<!-- List plugins you've installed via /plugins. Example: -->
-<!-- | Plugin | Source | What it provides | -->
-<!-- |--------|--------|------------------| -->
-<!-- | document-skills | anthropic-agent-skills | PDF, DOCX, XLSX, PPTX reading and creation | -->
-<!-- | commit-commands | claude-code-plugins | /commit, /commit-push-pr slash commands | -->
+### From claude-code-plugins (Anthropic Official)
 
-_No plugins installed yet. Run `/plugins` in Claude Code to browse and install._
+| Plugin | What it provides |
+|--------|-----------------|
+| **commit-commands** | `/commit` and `/commit-push-pr` slash commands for Git workflow |
+| **feature-dev** | Guided feature development with codebase understanding |
+| **code-review** | Code review command for pull requests |
+| **hookify** | Create rules to prevent unwanted Claude behaviors |
+| **plugin-dev** | Tools for creating your own plugins |
+| **ralph-wiggum** | Brainstorming and creative thinking techniques |
+| **security-guidance** | Security best practices and vulnerability checks |
+
+### From claude-code-workflows (Community)
+
+| Plugin | What it provides |
+|--------|-----------------|
+| **security-compliance** | Security compliance auditing |
+| **security-scanning** | SAST, threat modeling, and security hardening |
+| **code-documentation** | Technical documentation and tutorial generation |
+| **agent-orchestration** | Context management for multi-agent workflows |
+| **business-analytics** | KPI dashboards and data storytelling |
+| **codebase-cleanup** | Test automation and code review |
+| **conductor** | Project management with tracks and phased implementation |
+| **content-marketing** | Content strategy, SEO, and distribution |
+| **context-management** | Dynamic context and knowledge graph management |
+| **customer-sales-automation** | Customer support and sales automation |
+| **hr-legal-compliance** | HR, legal docs, and GDPR compliance |
+| **git-pr-workflows** | Git workflow from review through PR creation |
+| **seo-analysis-monitoring** | SEO auditing, authority building, cannibalization detection |
+| **seo-content-creation** | SEO content writing, planning, and auditing |
+| **seo-technical-optimization** | Meta tags, keywords, schema markup, snippets |
+| **team-collaboration** | Developer experience optimization |
+| **ui-design** | Component design, accessibility, design systems |
+
+### From claude-plugins-official (Anthropic Extras)
+
+| Plugin | What it provides |
+|--------|-----------------|
+| **claude-md-management** | Audit and improve CLAUDE.md files |
+
+### From anthropic-agent-skills (Document Processing)
+
+| Plugin | What it provides |
+|--------|-----------------|
+| **document-skills** | `/pdf`, `/docx`, `/xlsx`, `/pptx` — read and create office documents |
+
+---
+
+## Configured Marketplaces
+
+These marketplaces are configured in `.claude/settings.json`. Browse them with `/plugins`.
+
+| Marketplace | Source | What's in it |
+|-------------|--------|-------------|
+| **claude-code-plugins** | [anthropics/claude-code](https://github.com/anthropics/claude-code) | Official Anthropic plugins |
+| **claude-code-workflows** | [wshobson/agents](https://github.com/wshobson/agents) | Community workflow plugins |
+| **claude-plugins-official** | [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | More official plugins |
+| **anthropic-agent-skills** | [anthropics/skills](https://github.com/anthropics/skills) | Document processing skills |
 
 ---
 
 ## MCP Servers
 
-<!-- List any MCP servers configured in .mcp.json. Example: -->
-<!-- | Server | Purpose | -->
-<!-- |--------|---------- | -->
-<!-- | Context7 | Library documentation lookup | -->
-<!-- | Slack | Send/read Slack messages | -->
-
-_No MCP servers configured yet._
+_No MCP servers configured yet. Add them to `.mcp.json` as needed._
 
 ---
 
@@ -33,7 +78,8 @@ _No MCP servers configured yet._
 
 | Command | Description |
 |---------|-------------|
-| `/commit` | Commit changes with a conventional commit message (example included in .claude/commands/) |
+| `/commit` | Commit changes with a conventional commit message (from commit-commands plugin) |
+| `/commit-push-pr` | Commit, push, and open a pull request in one step |
 
 ---
 
@@ -51,6 +97,8 @@ These tools are built into Claude Code — no setup needed.
 | **Bash** | Run terminal commands |
 | **WebFetch** | Fetch content from a URL |
 | **WebSearch** | Search the web |
+| **Task** | Create and track tasks |
+| **Monitor** | Stream events from background processes |
 
 ---
 
@@ -66,4 +114,4 @@ These tools are built into Claude Code — no setup needed.
 
 ---
 
-_Last updated: [date]_
+_Last updated: 2026-04-14_
