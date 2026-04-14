@@ -1,0 +1,48 @@
+# Minimal CI template — runs on push and pull requests
+# Docs: https://docs.github.com/actions
+#
+# To enable: rename this file to `ci.yml`
+# Update the build/test steps to match your project's stack.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----- Node.js example (uncomment if applicable) -----
+      # - name: Set up Node
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: "20"
+      #     cache: "npm"
+      # - run: npm ci
+      # - run: npm test
+
+      # ----- Python example (uncomment if applicable) -----
+      # - name: Set up Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.12"
+      # - run: pip install -r requirements.txt
+      # - run: pytest
+
+      # ----- .NET example (uncomment if applicable) -----
+      # - name: Set up .NET
+      #   uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: "8.0.x"
+      # - run: dotnet restore
+      # - run: dotnet test
+
+      - name: Placeholder
+        run: echo "Replace this with your build/test commands"

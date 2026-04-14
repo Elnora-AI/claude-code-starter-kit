@@ -31,6 +31,10 @@ Update this file as you add or remove tools so Claude always knows what's availa
 | Plugin | What it provides |
 |--------|-----------------|
 | **claude-md-management** | Audit and improve CLAUDE.md files |
+| **superpowers** | Planning, brainstorming, TDD, systematic debugging, subagent-driven development skills |
+| **context7** | Fetch up-to-date library/framework documentation via MCP |
+| **playwright** | Browser automation and web testing via MCP |
+| **claude-code-setup** | Analyze a codebase and recommend hooks, subagents, skills, plugins, MCP servers |
 
 ### From anthropic-agent-skills (Document Processing)
 
@@ -55,7 +59,14 @@ These marketplaces are configured in `.claude/settings.json`. Browse them with `
 
 ## MCP Servers
 
-_No MCP servers configured yet. Add them to `.mcp.json` as needed._
+Provided automatically by installed plugins:
+
+| MCP Server | Source Plugin | What it provides |
+|-----------|---------------|------------------|
+| **context7** | context7 | `query-docs`, `resolve-library-id` — fetch current library/framework documentation |
+| **playwright** | playwright | Full browser automation suite (navigate, click, type, screenshot, network, console) |
+
+_Add project-specific MCP servers to `.mcp.json` as needed._
 
 ---
 
@@ -100,3 +111,4 @@ These tools are built into Claude Code — no setup needed.
 ---
 
 _Last updated: 2026-04-14_
+

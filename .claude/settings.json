@@ -14,6 +14,8 @@
       "Task",
       "NotebookEdit",
       "Monitor",
+      "mcp__context7__*",
+      "mcp__grep__*",
       "Bash(*)"
     ],
     "deny": [
@@ -33,6 +35,8 @@
       "Bash(docker system prune*)",
       "Bash(docker volume rm*)",
       "Bash(docker volume prune*)",
+      "Bash(dotnet ef database drop*)",
+      "Bash(format *)",
       "Bash(shutdown*)",
       "Bash(restart*)"
     ]
@@ -49,7 +53,11 @@
     "business-analytics@claude-code-workflows": true,
     "hr-legal-compliance@claude-code-workflows": true,
     "claude-md-management@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": true,
+    "superpowers@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-code-plugins": {

@@ -12,8 +12,10 @@ claude-code-starter-kit/
 ├── TOOLS.md                  # Catalog of tools, plugins, and integrations you add over time
 ├── .gitignore                # Keeps secrets, OS files, and build artifacts out of Git
 ├── .env.template             # Template for environment variables (copy to .env)
+├── .mcp.json                 # Project MCP servers (context7, grep)
+├── .github/                  # Dependabot, CI, CodeQL, PR/issue templates (disabled by default)
 ├── .claude/
-│   ├── settings.json         # Plugin marketplaces and permission defaults
+│   ├── settings.json         # Plugin marketplaces, enabled plugins, and permission defaults
 │   └── commands/
 │       └── commit.md         # Example custom slash command (/commit)
 ├── docs/
@@ -24,6 +26,7 @@ claude-code-starter-kit/
 │       ├── meeting-notes-2026-04-14.md
 │       └── project-brief-example.md
 ├── marketplace-plugins.md    # Curated list of safe plugin marketplaces and recommendations
+├── cache/                    # Runtime scratch — gitignored, for logs/state/downloads
 └── scripts/
     ├── setup-mac.sh          # One-command install for macOS
     └── setup-windows.ps1     # One-command install for Windows

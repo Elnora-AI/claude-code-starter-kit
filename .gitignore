@@ -2,16 +2,61 @@
 # Environment & Secrets — NEVER commit these
 # ============================================================
 .env
-.env.local
-.env.*.local
-.env.production
-.env.staging
+.env.*
+!.env.template
+!.env.example
+*.env
+
+# Credential and secret files (any name/path)
+**/credentials*.json
+**/secrets*.json
+**/auth*.json
+**/*token*.json
+**/*secret*.json
+**/api-key*
+**/apikey*
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# SSH
+.ssh/
+
+# Cloud provider credentials
+.aws/
+aws-credentials*
+gcp-*.json
+*-keyfile.json
+service-account*.json
+.azure/
+azure-*.json
+
+# Terraform state (may contain secrets)
+*.tfstate
+*.tfstate.*
+.terraform/
 
 # ============================================================
 # Claude Code — local settings are per-user
 # ============================================================
 .claude/settings.local.json
-cache/
+.claude/knowledge-base.local.md
+
+# Runtime scratch folder — regenerable state, logs, downloaded artifacts
+# Keep the folder (README + .gitkeep) but ignore everything else inside
+cache/*
+!cache/README.md
+!cache/.gitkeep
 
 # ============================================================
 # OS files
