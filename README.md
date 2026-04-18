@@ -24,7 +24,7 @@ claude-code-starter-kit/
 │   └── commands/
 │       └── commit.md                     # Example custom slash command (/commit)
 ├── docs/
-│   └── getting-started.md                # What to do after the workshop
+│   └── getting-started.md                # First steps after install
 └── cache/                                # Runtime scratch — gitignored, for logs/state/downloads
 ```
 

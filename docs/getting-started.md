@@ -1,4 +1,4 @@
-# Getting Started — What To Do After the Workshop
+# Getting Started — First Steps After Install
 
 You've got Claude Code installed and running. Here's how to make the most of it.
 
