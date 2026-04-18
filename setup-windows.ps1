@@ -56,6 +56,37 @@ function Invoke-Step {
     }
 }
 
+function Test-RealPython {
+    # Windows ships with a Microsoft Store "app execution alias" for `python` —
+    # a 0-byte stub at %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe that opens
+    # the Store instead of running Python. Get-Command returns true for the stub,
+    # so we have to actually invoke it and check the output.
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) { return $false }
+    try {
+        $version = (& python --version 2>&1 | Select-Object -First 1)
+        return ($version -match '^Python 3\.\d+\.\d+')
+    } catch {
+        return $false
+    }
+}
+
+function Remove-PythonStoreAlias {
+    # Deletes the 0-byte Store stub so real Python (installed via winget) wins
+    # PATH lookup. We only delete if the file is actually a 0-byte stub — never
+    # touch a real python.exe.
+    $stub = "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"
+    if ((Test-Path $stub) -and ((Get-Item $stub -ErrorAction SilentlyContinue).Length -eq 0)) {
+        try {
+            Remove-Item $stub -Force -ErrorAction Stop
+            Write-Host "  Removed Python Store alias stub." -ForegroundColor Yellow
+            return $true
+        } catch {
+            return $false
+        }
+    }
+    return $false
+}
+
 Write-Host ""
 Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "  Claude Code Setup for Windows" -ForegroundColor Cyan
@@ -106,10 +137,26 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
 }
 
 # --- [3/8] Python 3.12 ---
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+# Test-RealPython rejects the Microsoft Store stub alias — Get-Command alone
+# would return a false positive on a fresh Windows laptop.
+if (-not (Test-RealPython)) {
     Write-Host "[3/8] Installing Python 3.12..." -ForegroundColor Green
-    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --version 3.12.10 --accept-package-agreements --accept-source-agreements }
+    # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
+    [void](Remove-PythonStoreAlias)
+    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
+    # After install, if the Store stub is still intercepting (winget added a new
+    # one, or PATH order is wrong), remove it and refresh PATH once more.
+    if (-not (Test-RealPython)) {
+        if (Remove-PythonStoreAlias) {
+            Update-SessionPath
+        }
+        if (-not (Test-RealPython)) {
+            Write-Host "  [!] Python install completed but `python` still doesn't resolve to real Python." -ForegroundColor Red
+            Write-Host "      Disable the Store alias manually: Settings -> Apps -> Advanced app settings -> App execution aliases -> turn off 'python.exe'." -ForegroundColor Red
+            [void]$FailedSteps.Add("Python 3.12 (PATH/alias issue)")
+        }
+    }
 } else {
     Write-Host "[3/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
@@ -134,6 +181,29 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "[5/8] Installing Claude Code..." -ForegroundColor Green
     Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
     Update-SessionPath
+
+    # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
+    # updates User PATH via setx. On corporate laptops, Group Policy can silently
+    # revert User PATH changes — user opens a new terminal, claude is gone.
+    # Detect this and fall back to copying claude.exe into WindowsApps (already
+    # in default user PATH on Win10/11, and immune to Group Policy PATH reverts).
+    $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
+    $claudeExe    = Join-Path $claudeBinDir "claude.exe"
+    $userPath     = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ((Test-Path $claudeExe) -and ($userPath -notlike "*$claudeBinDir*")) {
+        Write-Host "  [!] User PATH did not persist `.local\bin` — Group Policy may be reverting." -ForegroundColor Yellow
+        $windowsApps = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+        if (Test-Path $windowsApps) {
+            try {
+                Copy-Item $claudeExe (Join-Path $windowsApps "claude.exe") -Force -ErrorAction Stop
+                Write-Host "  Copied claude.exe to $windowsApps (in default user PATH)." -ForegroundColor Green
+                Write-Host "  Note: this copy will not auto-update. Re-run this script to refresh after Anthropic releases." -ForegroundColor Gray
+            } catch {
+                Write-Host "  [!] Fallback copy to WindowsApps failed: $($_.Exception.Message)" -ForegroundColor Red
+                [void]$FailedSteps.Add("Claude Code PATH")
+            }
+        }
+    }
 } else {
     Write-Host "[5/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
 }
