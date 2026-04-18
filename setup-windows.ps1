@@ -1,15 +1,21 @@
-﻿# ============================================================
+# ============================================================
 # Claude Code Setup — Windows
 # ============================================================
-# Installs everything from the AI Agent Workshop Installation Guide.
+# Installs a complete Claude Code development environment:
+# Node.js, Python, Claude Code CLI, GitHub CLI, and Obsidian.
+# (Assumes VS Code and Git are installed manually first — see
+# README.md.)
+#
 # Run from PowerShell:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #   .\setup-windows.ps1
 #
 # Error handling: the script CONTINUES on failure. Each step is
 # isolated — if one install fails (network, winget glitch, broken
-# manifest, etc.), remaining steps still run, and a summary of
-# failures is printed at the end.
+# manifest, etc.), remaining steps still run. On any failure you
+# get a structured FAILURE box with the exit code, last 10 lines
+# of captured output, and a remediation hint. At the end of the
+# run a recap block prints remediation for each failed step.
 # ============================================================
 
 # Non-terminating errors don't stop the script (this is the PS default,
@@ -36,23 +42,225 @@ function Update-SessionPath {
     $env:Path = ($parts -join ";")
 }
 
+# ------------------------------------------------------------
+# Get-RemediationHint -Label "<step label>"
+# ------------------------------------------------------------
+# Returns a multi-line, step-specific remediation message. Used by
+# Write-StepFailure (immediate failure context) AND by the end-of-run
+# recap (so the user gets a full punch list of what to do next).
+# Matched via -like wildcards so "Python 3.12 (PATH/alias issue)" still
+# hits the Python branch.
+function Get-RemediationHint {
+    param([string]$Label)
+    if ($Label -like "winget*") {
+        return @'
+winget ships with the "App Installer" package on Windows 10 (build 1809+)
+and Windows 11. If it's missing:
+  1. Open Microsoft Store
+  2. Search for "App Installer" OR go to:
+       https://apps.microsoft.com/detail/9nblggh4nns1
+  3. Click Install
+  4. Reopen PowerShell and re-run this script
+If the Store is blocked by your org's policy:
+  - Download the .msixbundle directly from
+      https://github.com/microsoft/winget-cli/releases
+    and install via: Add-AppxPackage <path-to-bundle>
+  - Or use Chocolatey (https://chocolatey.org) / Scoop (https://scoop.sh)
+    to install these tools instead.
+'@
+    }
+    elseif ($Label -like "Node.js*") {
+        return @'
+Try manually:
+  winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://nodejs.org/en/download
+Verify in a NEW PowerShell window:
+  node --version    # should print vXX.X.X
+  npm --version
+If `node` still isn't found after a new terminal, your PATH didn't update —
+check: Get-Command node  and:  $env:Path -split ';' | Select-String node
+'@
+    }
+    elseif ($Label -like "Git*" -and $Label -notlike "Git config*") {
+        return @'
+Try manually:
+  winget install Git.Git --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://git-scm.com/download/win
+Verify in a NEW PowerShell window:
+  git --version
+'@
+    }
+    elseif ($Label -like "Git config*") {
+        return @'
+Set the values manually:
+  git config --global user.name  "Your Full Name"
+  git config --global user.email "you@example.com"
+  git config --global init.defaultBranch main
+Verify all three at once:
+  git config --global --list | Select-String -Pattern 'user\.|init\.'
+'@
+    }
+    elseif ($Label -like "Python*") {
+        return @'
+Try manually:
+  winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://www.python.org/downloads/windows/
+If the Microsoft Store keeps intercepting `python`:
+  1. Settings -> Apps -> Advanced app settings -> App execution aliases
+  2. Turn OFF BOTH `python.exe` and `python3.exe`
+  3. Reopen PowerShell and run:  python --version
+Verify:
+  python --version   # should print "Python 3.x.x" — NOT open the Store
+If `python` still opens the Store but real Python is installed, use the
+`py` launcher instead (lives at C:\Windows\py.exe, always available):
+  py --version
+  py -m pip install <pkg>
+'@
+    }
+    elseif ($Label -like "VS Code*") {
+        return @'
+Try manually:
+  winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://code.visualstudio.com/download
+Verify by reopening PowerShell and running:
+  code --version
+If `code` command isn't found but VS Code is installed: add its bin dir
+to PATH manually (usually $env:LOCALAPPDATA\Programs\Microsoft VS Code\bin).
+'@
+    }
+    elseif ($Label -like "Claude Code*") {
+        return @'
+Try manually:
+  irm https://claude.ai/install.ps1 | iex
+Or install via npm (requires Node.js):
+  npm install -g @anthropic-ai/claude-code
+If PowerShell blocks the install script with an execution policy error:
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  irm https://claude.ai/install.ps1 | iex
+If your PATH keeps reverting (corporate laptop / Group Policy), copy
+the exe into WindowsApps which is always in default user PATH:
+  Copy-Item "$env:USERPROFILE\.local\bin\claude.exe" `
+            "$env:LOCALAPPDATA\Microsoft\WindowsApps\claude.exe" -Force
+Docs: https://docs.claude.com/en/docs/claude-code/overview
+Verify in a NEW PowerShell window:
+  claude --version
+'@
+    }
+    elseif ($Label -like "GitHub CLI*") {
+        return @'
+Try manually:
+  winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://cli.github.com/
+Verify in a NEW PowerShell window:
+  gh --version
+Then authenticate:
+  gh auth login        # choose GitHub.com, HTTPS, then browser login
+If PATH didn't persist, copy gh.exe to WindowsApps:
+  Copy-Item "$env:ProgramFiles\GitHub CLI\gh.exe" `
+            "$env:LOCALAPPDATA\Microsoft\WindowsApps\gh.exe" -Force
+'@
+    }
+    elseif ($Label -like "Obsidian*") {
+        return @'
+Try manually:
+  winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements
+Or download the installer:
+  https://obsidian.md/download
+This step is OPTIONAL — you can skip it if you don't plan to use a
+knowledge base. Nothing else in this setup depends on Obsidian.
+'@
+    }
+    elseif ($Label -like "Projects folder*") {
+        return @'
+Try manually:
+  New-Item -ItemType Directory "$env:USERPROFILE\Documents\Projects"
+If that fails, check your Documents folder exists and is writable:
+  Get-Item "$env:USERPROFILE\Documents"
+  (Get-Acl "$env:USERPROFILE\Documents").Access | Where-Object { $_.IdentityReference -like "*$env:USERNAME*" }
+Common causes: OneDrive "Known Folder Move" has relocated Documents to
+a synced folder that's temporarily offline, or a corporate policy has
+made Documents read-only. In that case, pick a different parent folder:
+  New-Item -ItemType Directory "$env:USERPROFILE\Projects"
+'@
+    }
+    else {
+        return "No specific remediation available — scroll up to see the captured output."
+    }
+}
+
+# ------------------------------------------------------------
+# Write-StepFailure -Label "..." -ExitCode N [-Command "..."] [-ErrorOutput "..."]
+# ------------------------------------------------------------
+# Prints a structured FAILURE box with the exit code, the command,
+# the last 10 lines of captured output, and a step-specific remediation hint.
+function Write-StepFailure {
+    param(
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][int]$ExitCode,
+        [string]$Command = "",
+        [string]$ErrorOutput = ""
+    )
+    Write-Host ""
+    Write-Host "  +-- FAILURE: $Label" -ForegroundColor Red
+    Write-Host "  |   Exit code: $ExitCode" -ForegroundColor Red
+    if ($Command) {
+        Write-Host "  |   Command:   $Command" -ForegroundColor Red
+    }
+    if ($ErrorOutput) {
+        $lines = ($ErrorOutput -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 10
+        if ($lines) {
+            Write-Host "  |" -ForegroundColor Red
+            Write-Host "  |   Captured output (last 10 lines):" -ForegroundColor Red
+            foreach ($line in $lines) {
+                Write-Host "  |     $line" -ForegroundColor DarkGray
+            }
+        }
+    }
+    Write-Host "  |" -ForegroundColor Red
+    Write-Host "  |   What to do:" -ForegroundColor Yellow
+    $hint = Get-RemediationHint -Label $Label
+    foreach ($line in ($hint -split "`r?`n")) {
+        Write-Host "  |     $line" -ForegroundColor Yellow
+    }
+    Write-Host "  +-----------------------------------------------------------" -ForegroundColor Red
+    Write-Host ""
+}
+
 function Invoke-Step {
-    # Runs a scriptblock, catches any exception or non-zero exit code,
-    # records the failure, and continues.
+    # Runs a scriptblock. On failure (exception or non-zero $LASTEXITCODE)
+    # prints a structured FAILURE box and records the step for the end-of-run
+    # recap.
+    #
+    # Captures stdout+stderr (via 2>&1) into a buffer while still echoing each
+    # line live, so the FAILURE box can quote the last 10 lines of output.
     param(
         [Parameter(Mandatory)][string]$Label,
         [Parameter(Mandatory)][scriptblock]$Action
     )
+    $commandText = ($Action.ToString().Trim() -replace '\s+', ' ')
+    $buffer = New-Object System.Text.StringBuilder
     try {
-        & $Action
+        & $Action 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+            [void]$buffer.AppendLine($line)
+            Write-Host $line
+        }
         if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
-            Write-Host "  [!] $Label failed (exit $LASTEXITCODE) — continuing." -ForegroundColor Red
-            [void]$FailedSteps.Add($Label)
+            Write-StepFailure -Label $Label -ExitCode $LASTEXITCODE `
+                -Command $commandText -ErrorOutput $buffer.ToString()
+            [void]$FailedSteps.Add("$Label (exit $LASTEXITCODE)")
             $global:LASTEXITCODE = 0
         }
     } catch {
-        Write-Host "  [!] $Label failed: $($_.Exception.Message) — continuing." -ForegroundColor Red
-        [void]$FailedSteps.Add($Label)
+        [void]$buffer.AppendLine($_.Exception.Message)
+        Write-StepFailure -Label $Label -ExitCode -1 `
+            -Command $commandText -ErrorOutput $buffer.ToString()
+        [void]$FailedSteps.Add("$Label ($($_.Exception.Message))")
     }
 }
 
@@ -75,16 +283,58 @@ function Remove-PythonStoreAlias {
     # PATH lookup. We only delete if the file is actually a 0-byte stub — never
     # touch a real python.exe.
     $stub = "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"
-    if ((Test-Path $stub) -and ((Get-Item $stub -ErrorAction SilentlyContinue).Length -eq 0)) {
-        try {
-            Remove-Item $stub -Force -ErrorAction Stop
-            Write-Host "  Removed Python Store alias stub." -ForegroundColor Yellow
-            return $true
-        } catch {
-            return $false
-        }
+    if (-not (Test-Path $stub)) { return $false }
+    $stubItem = Get-Item $stub -ErrorAction SilentlyContinue
+    if (-not $stubItem -or $stubItem.Length -ne 0) { return $false }
+    try {
+        Remove-Item $stub -Force -ErrorAction Stop
+        Write-Host "  Removed Python Store alias stub at $stub" -ForegroundColor Yellow
+        return $true
+    } catch {
+        Write-Host "  [!] Could not remove Python Store alias stub at $stub" -ForegroundColor Red
+        Write-Host "      Reason: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "      Disable it manually instead: Settings -> Apps -> Advanced app settings" -ForegroundColor Red
+        Write-Host "      -> App execution aliases -> turn OFF 'python.exe' and 'python3.exe'." -ForegroundColor Red
+        return $false
     }
-    return $false
+}
+
+function Copy-StandaloneExeToWindowsApps {
+    # Copies a self-contained .exe into %LOCALAPPDATA%\Microsoft\WindowsApps —
+    # always in the default user PATH on Win10/11 and immune to Group Policy
+    # PATH reverts. Only safe for single-binary tools (Go binaries like gh.exe,
+    # bundled binaries like claude.exe). Do NOT use for Python — python.exe
+    # depends on neighbouring DLLs that won't travel with the copy.
+    param(
+        [Parameter(Mandatory)][string]$ExePath,
+        [Parameter(Mandatory)][string]$ToolName
+    )
+    if (-not (Test-Path $ExePath)) {
+        Write-Host "  [!] Source exe not found at $ExePath — cannot copy." -ForegroundColor Red
+        return $false
+    }
+    $windowsApps = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+    if (-not (Test-Path $windowsApps)) {
+        Write-Host "  [!] WindowsApps folder not found at $windowsApps — unusual for Win10/11." -ForegroundColor Red
+        Write-Host "      You can add $((Split-Path $ExePath -Parent)) to your User PATH manually:" -ForegroundColor Red
+        Write-Host "        [Environment]::SetEnvironmentVariable('Path', `"`$env:Path;$((Split-Path $ExePath -Parent))`", 'User')" -ForegroundColor Red
+        return $false
+    }
+    try {
+        Copy-Item $ExePath (Join-Path $windowsApps "$ToolName.exe") -Force -ErrorAction Stop
+        Write-Host "  Copied $ToolName.exe to WindowsApps (GP-immune PATH fallback)." -ForegroundColor Green
+        Write-Host "  Note: this copy will not auto-update — re-run the script after upstream releases." -ForegroundColor Gray
+        return $true
+    } catch {
+        Write-Host "  [!] Fallback copy for $ToolName failed:" -ForegroundColor Red
+        Write-Host "      Source:      $ExePath" -ForegroundColor Red
+        Write-Host "      Destination: $(Join-Path $windowsApps "$ToolName.exe")" -ForegroundColor Red
+        Write-Host "      Reason:      $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "      This usually means antivirus is blocking the copy, or WindowsApps" -ForegroundColor Red
+        Write-Host "      is locked down by Group Policy. Try running PowerShell as Administrator" -ForegroundColor Red
+        Write-Host "      and re-run, or add $(Split-Path $ExePath -Parent) to PATH manually." -ForegroundColor Red
+        return $false
+    }
 }
 
 Write-Host ""
@@ -96,9 +346,27 @@ Write-Host ""
 # --- Check for winget ---
 $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
 if (-not $hasWinget) {
-    Write-Host "[WARNING] winget not found. Install 'App Installer' from the Microsoft Store:" -ForegroundColor Yellow
-    Write-Host "          https://apps.microsoft.com/detail/9nblggh4nns1" -ForegroundColor Yellow
-    Read-Host "Press Enter after installing winget, or Ctrl+C to exit"
+    Write-Host ""
+    Write-Host "  +-- PREREQUISITE: winget not found" -ForegroundColor Yellow
+    Write-Host "  |" -ForegroundColor Yellow
+    Write-Host "  |   winget is the Windows package manager used by this script to" -ForegroundColor Yellow
+    Write-Host "  |   install Node.js, Python, VS Code, GitHub CLI, and Obsidian." -ForegroundColor Yellow
+    Write-Host "  |" -ForegroundColor Yellow
+    Write-Host "  |   What to do:" -ForegroundColor Yellow
+    foreach ($line in ((Get-RemediationHint -Label "winget") -split "`r?`n")) {
+        Write-Host "  |     $line" -ForegroundColor Yellow
+    }
+    Write-Host "  +-----------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host ""
+    Read-Host "Press Enter AFTER installing winget (script will retry), or Ctrl+C to exit"
+    # Re-check; if still missing, most steps will fail but we let them run so
+    # the user sees the full picture and can take action on any that use direct
+    # installers (Claude Code uses irm|iex, not winget).
+    $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $hasWinget) {
+        Write-Host "  [!] winget still not found — winget-based steps will fail below." -ForegroundColor Red
+        [void]$FailedSteps.Add("winget (prerequisite missing)")
+    }
 }
 
 # --- [1/8] Node.js ---
@@ -123,17 +391,41 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     try {
         $gitName  = git config --global user.name
         $gitEmail = git config --global user.email
-        if (-not $gitName)  { $gitName  = Read-Host "  Enter your full name for git commits"; if ($gitName)  { git config --global user.name  "$gitName" } }
-        if (-not $gitEmail) { $gitEmail = Read-Host "  Enter your email for git commits";     if ($gitEmail) { git config --global user.email "$gitEmail" } }
+        if (-not $gitName) {
+            $gitName = Read-Host "  Enter your full name for git commits"
+            if ($gitName) {
+                git config --global user.name "$gitName"
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "  [!] 'git config --global user.name' failed (exit $LASTEXITCODE)." -ForegroundColor Red
+                    Write-Host "      Run manually: git config --global user.name `"$gitName`"" -ForegroundColor Red
+                    [void]$FailedSteps.Add("Git config (user.name)")
+                    $global:LASTEXITCODE = 0
+                }
+            }
+        }
+        if (-not $gitEmail) {
+            $gitEmail = Read-Host "  Enter your email for git commits"
+            if ($gitEmail) {
+                git config --global user.email "$gitEmail"
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "  [!] 'git config --global user.email' failed (exit $LASTEXITCODE)." -ForegroundColor Red
+                    Write-Host "      Run manually: git config --global user.email `"$gitEmail`"" -ForegroundColor Red
+                    [void]$FailedSteps.Add("Git config (user.email)")
+                    $global:LASTEXITCODE = 0
+                }
+            }
+        }
         Write-Host "  git user: $(git config --global user.name) <$(git config --global user.email)>" -ForegroundColor Gray
         $defBranch = git config --global init.defaultBranch
         if (-not $defBranch) { git config --global init.defaultBranch main; Write-Host "  git init.defaultBranch: main" -ForegroundColor Gray }
     } catch {
-        Write-Host "  [!] Git configuration step hit an error: $($_.Exception.Message) — continuing." -ForegroundColor Red
-        [void]$FailedSteps.Add("Git config")
+        Write-StepFailure -Label "Git config" -ExitCode -1 `
+            -Command "git config --global ..." -ErrorOutput $_.Exception.Message
+        [void]$FailedSteps.Add("Git config ($($_.Exception.Message))")
     }
 } else {
     Write-Host "  [!] git not available — skipping git config." -ForegroundColor Red
+    Write-Host "      See the Git remediation in the recap at the end of this run." -ForegroundColor Red
 }
 
 # --- [3/8] Python 3.12 ---
@@ -152,8 +444,30 @@ if (-not (Test-RealPython)) {
             Update-SessionPath
         }
         if (-not (Test-RealPython)) {
-            Write-Host "  [!] Python install completed but `python` still doesn't resolve to real Python." -ForegroundColor Red
-            Write-Host "      Disable the Store alias manually: Settings -> Apps -> Advanced app settings -> App execution aliases -> turn off 'python.exe'." -ForegroundColor Red
+            # Python isn't a single binary — it depends on neighbouring DLLs —
+            # so we can't use the WindowsApps copy trick. Tell the user how to
+            # fix PATH manually, and point them at the py launcher as a fallback
+            # (py.exe lives in C:\Windows and is always on Machine PATH).
+            Write-Host ""
+            Write-Host "  +-- FAILURE: Python 3.12 (PATH/alias issue)" -ForegroundColor Red
+            Write-Host "  |   winget reported success, but 'python' still doesn't resolve" -ForegroundColor Red
+            Write-Host "  |   to real Python in this shell." -ForegroundColor Red
+            $pyCandidate = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+            if (Test-Path $pyCandidate) {
+                Write-Host "  |" -ForegroundColor Red
+                Write-Host "  |   Real Python is at:  $pyCandidate" -ForegroundColor Red
+            }
+            $pyLauncher = "C:\Windows\py.exe"
+            if (Test-Path $pyLauncher) {
+                Write-Host "  |   Py launcher is at:  $pyLauncher  (always on PATH)" -ForegroundColor Red
+            }
+            Write-Host "  |" -ForegroundColor Red
+            Write-Host "  |   What to do:" -ForegroundColor Yellow
+            foreach ($line in ((Get-RemediationHint -Label "Python 3.12") -split "`r?`n")) {
+                Write-Host "  |     $line" -ForegroundColor Yellow
+            }
+            Write-Host "  +-----------------------------------------------------------" -ForegroundColor Red
+            Write-Host ""
             [void]$FailedSteps.Add("Python 3.12 (PATH/alias issue)")
         }
     }
@@ -183,25 +497,17 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Update-SessionPath
 
     # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
-    # updates User PATH via setx. On corporate laptops, Group Policy can silently
-    # revert User PATH changes — user opens a new terminal, claude is gone.
-    # Detect this and fall back to copying claude.exe into WindowsApps (already
-    # in default user PATH on Win10/11, and immune to Group Policy PATH reverts).
+    # updates User PATH via setx. Corporate Group Policy can silently revert
+    # User PATH — user opens a new terminal, claude is gone. Detect and fall
+    # back to WindowsApps (default user PATH, GP-immune).
     $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
     $claudeExe    = Join-Path $claudeBinDir "claude.exe"
     $userPath     = [Environment]::GetEnvironmentVariable("Path", "User")
     if ((Test-Path $claudeExe) -and ($userPath -notlike "*$claudeBinDir*")) {
-        Write-Host "  [!] User PATH did not persist `.local\bin` — Group Policy may be reverting." -ForegroundColor Yellow
-        $windowsApps = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
-        if (Test-Path $windowsApps) {
-            try {
-                Copy-Item $claudeExe (Join-Path $windowsApps "claude.exe") -Force -ErrorAction Stop
-                Write-Host "  Copied claude.exe to $windowsApps (in default user PATH)." -ForegroundColor Green
-                Write-Host "  Note: this copy will not auto-update. Re-run this script to refresh after Anthropic releases." -ForegroundColor Gray
-            } catch {
-                Write-Host "  [!] Fallback copy to WindowsApps failed: $($_.Exception.Message)" -ForegroundColor Red
-                [void]$FailedSteps.Add("Claude Code PATH")
-            }
+        Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+        Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+        if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
+            [void]$FailedSteps.Add("Claude Code PATH")
         }
     }
 } else {
@@ -213,6 +519,29 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Host "[6/8] Installing GitHub CLI..." -ForegroundColor Green
     Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
+
+    # gh is a standalone Go binary — safe to copy to WindowsApps as a PATH
+    # fallback if the User/Machine PATH update didn't stick (GP, or new session
+    # env not refreshed in time).
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        $ghCandidates = @(
+            "$env:ProgramFiles\GitHub CLI\gh.exe",
+            "${env:ProgramFiles(x86)}\GitHub CLI\gh.exe",
+            "$env:LOCALAPPDATA\Programs\GitHub CLI\gh.exe"
+        )
+        $ghExe = $ghCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($ghExe) {
+            Write-Host "  [!] gh installed to $ghExe but not on PATH — applying WindowsApps fallback." -ForegroundColor Yellow
+            if (-not (Copy-StandaloneExeToWindowsApps -ExePath $ghExe -ToolName "gh")) {
+                [void]$FailedSteps.Add("GitHub CLI PATH")
+            }
+        } else {
+            Write-Host "  [!] gh reported installed by winget but not found in the usual locations." -ForegroundColor Red
+            Write-Host "      Check with: winget list --id GitHub.cli --exact" -ForegroundColor Red
+            Write-Host "      Or reinstall: winget install --id GitHub.cli" -ForegroundColor Red
+            [void]$FailedSteps.Add("GitHub CLI (binary not found after install)")
+        }
+    }
 } else {
     Write-Host "[6/8] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
 }
@@ -247,7 +576,9 @@ if (-not (Test-Path $projectsDir)) {
         New-Item -ItemType Directory -Path $projectsDir -ErrorAction Stop | Out-Null
         Write-Host "  Done." -ForegroundColor Yellow
     } catch {
-        Write-Host "  [!] Could not create $projectsDir : $($_.Exception.Message) — continuing." -ForegroundColor Red
+        Write-StepFailure -Label "Projects folder" -ExitCode -1 `
+            -Command "New-Item -ItemType Directory -Path $projectsDir" `
+            -ErrorOutput $_.Exception.Message
         [void]$FailedSteps.Add("Projects folder")
     }
 } else {
@@ -322,32 +653,52 @@ if ($obsidianExe) {
 Write-Host ""
 Write-Host "  Note: if anything shows 'not found' above, open a new PowerShell/VS Code window and re-check." -ForegroundColor Gray
 Write-Host ""
+Write-Host "-------------------------------------------" -ForegroundColor Cyan
+Write-Host "  IMPORTANT — to see the new PATH in VS Code:" -ForegroundColor Yellow
+Write-Host "  Quit VS Code FULLY (File -> Exit), then reopen it." -ForegroundColor Yellow
+Write-Host "  Closing just the terminal panel is not enough —" -ForegroundColor Yellow
+Write-Host "  VS Code caches its PATH at app launch time." -ForegroundColor Yellow
+Write-Host "-------------------------------------------" -ForegroundColor Cyan
+Write-Host ""
 
 if ($FailedSteps.Count -gt 0) {
-    Write-Host "-------------------------------------------" -ForegroundColor Yellow
-    Write-Host "  ⚠  $($FailedSteps.Count) step(s) failed:" -ForegroundColor Yellow
-    foreach ($step in $FailedSteps) {
-        Write-Host "     - $step" -ForegroundColor Yellow
+    Write-Host "===========================================" -ForegroundColor Yellow
+    Write-Host "  ⚠  $($FailedSteps.Count) step(s) failed — remediation below" -ForegroundColor Yellow
+    Write-Host "===========================================" -ForegroundColor Yellow
+    foreach ($stepEntry in $FailedSteps) {
+        # Strip trailing "(exit N)" / "(message)" to recover the bare label for lookup.
+        $stepLabel = ($stepEntry -replace '\s*\([^)]*\)\s*$', '').Trim()
+        if (-not $stepLabel) { $stepLabel = $stepEntry }
+        Write-Host ""
+        Write-Host "-- $stepEntry --" -ForegroundColor Yellow
+        $hint = Get-RemediationHint -Label $stepLabel
+        foreach ($line in ($hint -split "`r?`n")) {
+            Write-Host "  $line" -ForegroundColor Gray
+        }
     }
-    Write-Host "  Re-run this script to retry, or install the failed items manually." -ForegroundColor Yellow
-    Write-Host "-------------------------------------------" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Once you've fixed the issue(s), re-run:  .\setup-windows.ps1" -ForegroundColor Yellow
+    Write-Host "The script is idempotent — already-installed steps are skipped." -ForegroundColor Yellow
+    Write-Host "===========================================" -ForegroundColor Yellow
     Write-Host ""
 }
 
 Write-Host "Next steps (interactive — these need your browser/input):" -ForegroundColor White
 Write-Host "  1. Authenticate Claude Code:  claude          (log in, then /exit)"
 Write-Host "  2. Authenticate GitHub CLI:   gh auth login   (GitHub.com -> HTTPS -> browser)"
-Write-Host "  3. Create your workshop repo:"
+Write-Host "  3. Create your first project repo:"
 Write-Host "       cd `$env:USERPROFILE\Documents\Projects"
-Write-Host "       gh repo create my-workshop-project --private --add-readme --clone"
-Write-Host "       cd my-workshop-project; code ."
+Write-Host "       gh repo create my-project --private --add-readme --clone"
+Write-Host "       cd my-project; code ."
 Write-Host "  4. In VS Code terminal:  claude   then   /install-github-app"
 Write-Host "  5. Copy starter kit into your repo:"
 Write-Host "       git clone https://github.com/Elnora-AI/claude-code-starter-kit.git temp-starter"
 Write-Host "       robocopy temp-starter . /E /XD .git"
 Write-Host "       Remove-Item temp-starter -Recurse -Force"
-Write-Host "  6. (Optional) Create an Obsidian vault inside your OneDrive\knowledge-base folder."
+Write-Host "  6. (Optional) Create an Obsidian vault inside a OneDrive folder."
 Write-Host ""
 
-# Exit 0 even if some steps failed — summary above tells the user what to fix.
+# Exit 0 even if some steps failed — the remediation recap above tells the user
+# exactly what to do, and a non-zero exit would trip callers (e.g. IDE terminals
+# that highlight failures) in ways that can hide the remediation text.
 exit 0
