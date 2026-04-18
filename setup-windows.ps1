@@ -22,6 +22,12 @@
 # but being explicit for clarity).
 $ErrorActionPreference = "Continue"
 
+# Default-on logging. Start-Transcript captures all Write-Host, Write-Error,
+# AND native command output (winget, git, etc.) in PS 5.1+. Overwrites on each
+# run — re-runs are idempotent, so keeping old logs around isn't useful.
+$LogFile = Join-Path $env:USERPROFILE "claude-starter-install.log"
+try { Start-Transcript -Path $LogFile -Force | Out-Null } catch { }
+
 $FailedSteps = New-Object System.Collections.ArrayList
 
 function Update-SessionPath {
@@ -341,6 +347,7 @@ Write-Host ""
 Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "  Claude Code Setup for Windows" -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host "  Log: $LogFile" -ForegroundColor Gray
 Write-Host ""
 
 # --- Check for winget ---
@@ -369,22 +376,50 @@ if (-not $hasWinget) {
     }
 }
 
-# --- [1/8] Node.js ---
+# --- [1/8] Claude Code CLI (installed FIRST — zero dependencies) ---
+# Using Anthropic's native installer so Claude Code is the very first thing on
+# the machine. Works even when winget is missing (unlike the rest of the tools
+# below). Writes a self-contained binary to %USERPROFILE%\.local\bin\claude.exe.
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Write-Host "[1/8] Installing Claude Code..." -ForegroundColor Green
+    Write-Host "  Using Anthropic's native installer (no prerequisites required)." -ForegroundColor Gray
+    Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
+    Update-SessionPath
+
+    # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
+    # updates User PATH via setx. Corporate Group Policy can silently revert
+    # User PATH — user opens a new terminal, claude is gone. Detect and fall
+    # back to WindowsApps (default user PATH, GP-immune).
+    $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
+    $claudeExe    = Join-Path $claudeBinDir "claude.exe"
+    $userPath     = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ((Test-Path $claudeExe) -and ($userPath -notlike "*$claudeBinDir*")) {
+        Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+        Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+        if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
+            [void]$FailedSteps.Add("Claude Code PATH")
+        }
+    }
+} else {
+    Write-Host "[1/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
+}
+
+# --- [2/8] Node.js ---
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "[1/8] Installing Node.js..." -ForegroundColor Green
+    Write-Host "[2/8] Installing Node.js..." -ForegroundColor Green
     Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[1/8] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
+    Write-Host "[2/8] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [2/8] Git + user config ---
+# --- [3/8] Git + user config ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[2/8] Installing Git..." -ForegroundColor Green
+    Write-Host "[3/8] Installing Git..." -ForegroundColor Green
     Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[2/8] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
+    Write-Host "[3/8] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
 }
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
@@ -433,11 +468,11 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     Write-Host "      See the Git remediation in the recap at the end of this run." -ForegroundColor Red
 }
 
-# --- [3/8] Python 3.12 ---
+# --- [4/8] Python 3.12 ---
 # Test-RealPython rejects the Microsoft Store stub alias — Get-Command alone
 # would return a false positive on a fresh Windows laptop.
 if (-not (Test-RealPython)) {
-    Write-Host "[3/8] Installing Python 3.12..." -ForegroundColor Green
+    Write-Host "[4/8] Installing Python 3.12..." -ForegroundColor Green
     # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
     [void](Remove-PythonStoreAlias)
     Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements }
@@ -477,10 +512,10 @@ if (-not (Test-RealPython)) {
         }
     }
 } else {
-    Write-Host "[3/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
+    Write-Host "[4/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [4/8] VS Code ---
+# --- [5/8] VS Code ---
 $codePaths = @(
     "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
     "$env:ProgramFiles\Microsoft VS Code\Code.exe",
@@ -488,35 +523,11 @@ $codePaths = @(
 )
 $codeInstalled = (Get-Command code -ErrorAction SilentlyContinue) -or ($codePaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
 if (-not $codeInstalled) {
-    Write-Host "[4/8] Installing VS Code..." -ForegroundColor Green
+    Write-Host "[5/8] Installing VS Code..." -ForegroundColor Green
     Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[4/8] VS Code already installed. Skipping." -ForegroundColor Gray
-}
-
-# --- [5/8] Claude Code CLI ---
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Host "[5/8] Installing Claude Code..." -ForegroundColor Green
-    Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
-    Update-SessionPath
-
-    # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
-    # updates User PATH via setx. Corporate Group Policy can silently revert
-    # User PATH — user opens a new terminal, claude is gone. Detect and fall
-    # back to WindowsApps (default user PATH, GP-immune).
-    $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
-    $claudeExe    = Join-Path $claudeBinDir "claude.exe"
-    $userPath     = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ((Test-Path $claudeExe) -and ($userPath -notlike "*$claudeBinDir*")) {
-        Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
-        Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
-        if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
-            [void]$FailedSteps.Add("Claude Code PATH")
-        }
-    }
-} else {
-    Write-Host "[5/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
+    Write-Host "[5/8] VS Code already installed. Skipping." -ForegroundColor Gray
 }
 
 # --- [6/8] GitHub CLI ---
@@ -702,6 +713,9 @@ Write-Host "       robocopy temp-starter . /E /XD .git"
 Write-Host "       Remove-Item temp-starter -Recurse -Force"
 Write-Host "  6. (Optional) Create an Obsidian vault inside a OneDrive folder."
 Write-Host ""
+
+# Close the transcript so the log file is flushed and released.
+try { Stop-Transcript | Out-Null } catch { }
 
 # Exit 0 even if some steps failed — the remediation recap above tells the user
 # exactly what to do, and a non-zero exit would trip callers (e.g. IDE terminals

@@ -1,0 +1,67 @@
+# ============================================================
+# Claude Code Starter Kit — One-liner Installer (Windows)
+# ============================================================
+# Usage (PowerShell):
+#   irm https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.ps1 | iex
+#
+# Downloads the starter kit zip (no git required), extracts it to
+# %USERPROFILE%\Documents\claude-code-starter-kit, and runs setup-windows.ps1.
+# ============================================================
+
+$ErrorActionPreference = "Stop"
+
+$RepoOwner = "Elnora-AI"
+$RepoName  = "claude-code-starter-kit"
+$Branch    = "main"
+$TargetDir = Join-Path $env:USERPROFILE "Documents\$RepoName"
+
+Write-Host ""
+Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host "  Claude Code Starter Kit - Bootstrap" -ForegroundColor Cyan
+Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "This will:"
+Write-Host "  1. Download the starter kit to $TargetDir"
+Write-Host "  2. Run setup-windows.ps1 (installs Claude Code + dev tools)"
+Write-Host ""
+
+if (Test-Path $TargetDir) {
+    Write-Host "Starter kit already exists at $TargetDir" -ForegroundColor Gray
+    Write-Host "Re-running setup from existing copy. Remove the folder to re-download." -ForegroundColor Gray
+} else {
+    Write-Host "Downloading starter kit zip..." -ForegroundColor Green
+    $zipUrl  = "https://github.com/$RepoOwner/$RepoName/archive/refs/heads/$Branch.zip"
+    $zipPath = Join-Path $env:TEMP "$RepoName-bootstrap.zip"
+    $tmpExtractDir = Join-Path $env:TEMP "$RepoName-bootstrap"
+
+    try {
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+        if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force }
+        Expand-Archive -Path $zipPath -DestinationPath $tmpExtractDir -Force
+
+        $extracted = Join-Path $tmpExtractDir "$RepoName-$Branch"
+        if (-not (Test-Path $extracted)) {
+            throw "Expected folder not found after extract: $extracted"
+        }
+
+        New-Item -ItemType Directory -Path (Split-Path $TargetDir -Parent) -Force -ErrorAction SilentlyContinue | Out-Null
+        Move-Item -Path $extracted -Destination $TargetDir -Force
+        Write-Host "Extracted to $TargetDir" -ForegroundColor Green
+    } catch {
+        Write-Host "[!] Failed to download starter kit from $zipUrl" -ForegroundColor Red
+        Write-Host "    Reason: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "    Check your internet connection and retry:" -ForegroundColor Red
+        Write-Host "      irm https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Branch/install.ps1 | iex" -ForegroundColor Red
+        exit 1
+    } finally {
+        if (Test-Path $zipPath)       { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+Set-Location $TargetDir
+# Bypass execution policy for this process only so setup-windows.ps1 runs
+# without requiring the user to set it manually (as the older flow did).
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+Write-Host ""
+& .\setup-windows.ps1

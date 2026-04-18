@@ -12,8 +12,10 @@ claude-code-starter-kit/
 ├── TOOLS.md                              # Catalog of tools, plugins, and integrations you add over time
 ├── README.md                             # You are here
 ├── marketplace-plugins.md                # Curated list of safe plugin marketplaces and recommendations
-├── setup-mac.sh                          # One-command install for macOS
-├── setup-windows.ps1                     # One-command install for Windows
+├── install.sh                            # One-liner bootstrap for macOS/Linux (downloads + runs setup-mac.sh)
+├── install.ps1                           # One-liner bootstrap for Windows (downloads + runs setup-windows.ps1)
+├── setup-mac.sh                          # Full install script for macOS
+├── setup-windows.ps1                     # Full install script for Windows
 ├── .gitignore                            # Keeps secrets, OS files, and build artifacts out of Git
 ├── .env.template                         # Template for environment variables (copy to .env)
 ├── .mcp.json                             # Project MCP servers (context7, grep)
@@ -36,21 +38,30 @@ claude-code-starter-kit/
 
 ### 1. Install the toolchain
 
-On a fresh machine, run the setup script for your OS. It installs Node.js, Git, Python, VS Code,
-Claude Code, GitHub CLI, and (optionally) Obsidian, skipping anything that's already present.
+On a fresh machine, run the one-liner for your OS. It downloads the starter kit (no git required),
+installs Claude Code first (zero dependencies), then installs Node.js, Git, Python, VS Code,
+GitHub CLI, and Obsidian — skipping anything already present. Output streams live AND tees to
+`~/claude-starter-install.log` so you can paste it in support chats.
 
-**macOS** (from Terminal):
+**macOS / Linux** (from Terminal):
 ```bash
-./setup-mac.sh
+curl -fsSL https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.sh | bash
 ```
 
-**Windows** (from an Administrator PowerShell):
+**Windows** (from PowerShell):
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\setup-windows.ps1
+irm https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.ps1 | iex
 ```
 
-Restart your shell afterwards so PATH changes take effect.
+If you already cloned the repo, run the setup script directly:
+```bash
+./setup-mac.sh                # macOS
+.\setup-windows.ps1           # Windows (ExecutionPolicy Bypass is set by install.ps1; if running
+                              # setup-windows.ps1 directly, first run: Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass)
+```
+
+Restart your shell afterwards — the setup script also tells you this at the end, including the
+"quit VS Code fully" warning if you ran inside VS Code's terminal.
 
 ### 2. Copy this kit into your project
 

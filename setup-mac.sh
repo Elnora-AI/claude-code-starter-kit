@@ -20,6 +20,12 @@
 # NOTE: deliberately NOT using `set -e` so one failure does not abort the rest.
 set -u
 
+# Default-on logging. Tee everything (stdout + stderr) to a log file in $HOME.
+# Overwrites on each run — re-runs are idempotent, so keeping old logs around
+# isn't useful. Users hitting problems can paste the file path in support chats.
+LOG_FILE="$HOME/claude-starter-install.log"
+exec > >(tee "$LOG_FILE") 2>&1
+
 FAILED_STEPS=()
 
 # ------------------------------------------------------------
@@ -200,6 +206,7 @@ run_step() {
 echo "==========================================="
 echo "  Claude Code Setup for macOS"
 echo "==========================================="
+echo "  Log: $LOG_FILE"
 echo ""
 
 # --- Prerequisite: Xcode Command Line Tools ---
@@ -230,7 +237,25 @@ if ! xcode-select -p &>/dev/null; then
     exit 0
 fi
 
-# --- [1/9] Homebrew ---
+# --- [1/9] Claude Code CLI (installed FIRST — zero dependencies) ---
+# Using Anthropic's native installer rather than the brew cask so Claude Code
+# is the very first thing on the machine. Works before brew exists, writes a
+# self-contained binary to ~/.local/bin/claude, and auto-updates itself.
+if ! command -v claude &> /dev/null; then
+    echo "[1/9] Installing Claude Code..."
+    echo "  Using Anthropic's native installer (no prerequisites required)."
+    if run_step "Claude Code" /bin/bash -c "curl -fsSL https://claude.ai/install.sh | bash"; then
+        # Make `claude` visible in THIS shell without requiring a new terminal.
+        # The installer persists this to the user's shell profile for future
+        # sessions, but we also export it here so the rest of this run sees it.
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "  Done. Version: $(claude --version 2>/dev/null || echo 'installed — restart terminal')"
+    fi
+else
+    echo "[1/9] Claude Code already installed: $(claude --version). Skipping."
+fi
+
+# --- [2/9] Homebrew ---
 # Always try to load brew shellenv if a brew binary exists — VS Code's terminal
 # can inherit a stale PATH that doesn't include brew's prefix, which would make
 # `command -v brew` return false and send us down the wrong branch.
@@ -260,7 +285,7 @@ persist_brew_path() {
 }
 
 if ! command -v brew &> /dev/null; then
-    echo "[1/9] Installing Homebrew..."
+    echo "[2/9] Installing Homebrew..."
     echo "  Heads-up: this takes 5-15 min and will prompt for your Mac login"
     echo "  password. Password characters won't show as you type — that's normal."
     if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
@@ -307,7 +332,7 @@ if ! command -v brew &> /dev/null; then
         FAILED_STEPS+=("Homebrew (installer exit $brew_code)")
     fi
 else
-    echo "[1/9] Homebrew already installed. Skipping."
+    echo "[2/9] Homebrew already installed. Skipping."
     # Persist the PATH even on skip — prior runs may have installed brew without
     # editing the shell profile.
     if [ -x /opt/homebrew/bin/brew ]; then
@@ -317,20 +342,20 @@ else
     fi
 fi
 
-# --- [2/9] Node.js ---
+# --- [3/9] Node.js ---
 if ! command -v node &> /dev/null; then
-    echo "[2/9] Installing Node.js..."
+    echo "[3/9] Installing Node.js..."
     run_step "Node.js" brew install node && echo "  Done. Version: $(node --version)"
 else
-    echo "[2/9] Node.js already installed: $(node --version). Skipping."
+    echo "[3/9] Node.js already installed: $(node --version). Skipping."
 fi
 
-# --- [3/9] Git + user config ---
+# --- [4/9] Git + user config ---
 if ! command -v git &> /dev/null; then
-    echo "[3/9] Installing Git..."
+    echo "[4/9] Installing Git..."
     run_step "Git" brew install git && echo "  Done. Version: $(git --version)"
 else
-    echo "[3/9] Git already installed: $(git --version). Skipping."
+    echo "[4/9] Git already installed: $(git --version). Skipping."
     # Apple's Xcode CLT ships /usr/bin/git, which is typically a few minor
     # versions behind brew. Works fine for clone/commit/push — tell users how
     # to upgrade if they want the latest.
@@ -374,24 +399,24 @@ else
     echo "      See the Git remediation in the recap at the end of this run." >&2
 fi
 
-# --- [4/9] Python 3 ---
+# --- [5/9] Python 3 ---
 # Use plain `brew install python` (the "main" formula). `brew install python@3.12`
 # is keg-only — it installs to /opt/homebrew/opt/python@3.12/ without creating a
 # `python3` symlink in /opt/homebrew/bin, so users end up with only the Xcode stub
 # at /usr/bin/python3 (which prompts for Xcode every time).
 if ! command -v python3 &> /dev/null || [[ "$(command -v python3)" == "/usr/bin/python3" ]]; then
-    echo "[4/9] Installing Python 3..."
+    echo "[5/9] Installing Python 3..."
     run_step "Python 3" brew install python && echo "  Done. Version: $(python3 --version 2>/dev/null)"
 else
-    echo "[4/9] Python already installed: $(python3 --version). Skipping."
+    echo "[5/9] Python already installed: $(python3 --version). Skipping."
 fi
 
-# --- [5/9] VS Code ---
+# --- [6/9] VS Code ---
 if ! command -v code &> /dev/null && [ ! -d "/Applications/Visual Studio Code.app" ]; then
-    echo "[5/9] Installing VS Code..."
+    echo "[6/9] Installing VS Code..."
     run_step "VS Code" brew install --cask visual-studio-code && echo "  Done."
 else
-    echo "[5/9] VS Code already installed. Skipping."
+    echo "[6/9] VS Code already installed. Skipping."
 fi
 
 # Install the `code` CLI shim so `code .` works from terminal. The cask does not
@@ -413,15 +438,6 @@ if [ -x "$VSCODE_SHIM" ] && ! command -v code &> /dev/null; then
         echo "      Workaround: open VS Code, press Cmd+Shift+P, and run" >&2
         echo "        \"Shell Command: Install 'code' command in PATH\"" >&2
     fi
-fi
-
-# --- [6/9] Claude Code CLI ---
-if ! command -v claude &> /dev/null; then
-    echo "[6/9] Installing Claude Code..."
-    run_step "Claude Code" brew install --cask claude-code && \
-        echo "  Done. Version: $(claude --version 2>/dev/null || echo 'installed — restart terminal')"
-else
-    echo "[6/9] Claude Code already installed: $(claude --version). Skipping."
 fi
 
 # --- [7/9] GitHub CLI ---
