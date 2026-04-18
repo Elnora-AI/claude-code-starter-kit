@@ -261,6 +261,8 @@ persist_brew_path() {
 
 if ! command -v brew &> /dev/null; then
     echo "[1/9] Installing Homebrew..."
+    echo "  Heads-up: this takes 5-15 min and will prompt for your Mac login"
+    echo "  password. Password characters won't show as you type — that's normal."
     if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
         if [ -x /opt/homebrew/bin/brew ]; then
             BREW_PREFIX="/opt/homebrew"
@@ -329,6 +331,14 @@ if ! command -v git &> /dev/null; then
     run_step "Git" brew install git && echo "  Done. Version: $(git --version)"
 else
     echo "[3/9] Git already installed: $(git --version). Skipping."
+    # Apple's Xcode CLT ships /usr/bin/git, which is typically a few minor
+    # versions behind brew. Works fine for clone/commit/push — tell users how
+    # to upgrade if they want the latest.
+    if [[ "$(command -v git)" == "/usr/bin/git" ]]; then
+        echo "  Note: using Apple's Xcode CLT git at /usr/bin/git (older)."
+        echo "  To get the latest git:  brew install git"
+        echo "  Then ensure brew's PATH comes before /usr/bin in ~/.zprofile."
+    fi
 fi
 
 if command -v git &> /dev/null; then

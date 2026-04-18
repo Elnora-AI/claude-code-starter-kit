@@ -391,6 +391,11 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     try {
         $gitName  = git config --global user.name
         $gitEmail = git config --global user.email
+        # `git config --global <key>` exits 1 when the key is unset. Reset
+        # $LASTEXITCODE so the stale 1 doesn't bleed into Invoke-Step's
+        # success check for a subsequent scriptblock that doesn't itself
+        # set $LASTEXITCODE (pure PS cmdlets don't update it).
+        $global:LASTEXITCODE = 0
         if (-not $gitName) {
             $gitName = Read-Host "  Enter your full name for git commits"
             if ($gitName) {
