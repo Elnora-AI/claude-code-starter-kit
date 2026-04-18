@@ -27,8 +27,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Valid: cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift
-        language: [javascript-typescript, python]
+        # Valid: actions, cpp, csharp, go, java-kotlin, javascript-typescript, python, ruby, swift
+        # This starter kit has no compiled code — scan workflow files. Add languages as you adopt them.
+        language: [actions]
 
     steps:
       - name: Checkout
