@@ -17,9 +17,13 @@ claude-code-starter-kit/
 ├── setup-mac.sh                          # Full install script for macOS
 ├── setup-windows.ps1                     # Full install script for Windows
 ├── .gitignore                            # Keeps secrets, OS files, and build artifacts out of Git
+├── LICENSE                               # MIT
 ├── .env.template                         # Template for environment variables (copy to .env)
 ├── .mcp.json                             # Project MCP servers (context7, grep)
-├── .github/                              # Dependabot, CI, CodeQL (disabled by default — rename to enable)
+├── .github/
+│   ├── dependabot.yml                   # Weekly dependency update PRs (github-actions, npm, pip)
+│   ├── workflows/codeql.yml             # CodeQL scans workflow files on push, PR, and weekly cron
+│   └── workflows/ci.yml.disabled        # CI template — rename to enable when you add a toolchain
 ├── .claude/
 │   ├── settings.json                     # Plugin marketplaces, enabled plugins, and permission defaults
 │   ├── knowledge-base.local.md.template  # Template for per-user knowledge-base config (gitignored once filled in)
@@ -101,6 +105,20 @@ The `.local.md` file is gitignored, so each teammate keeps their own copy.
 ### 6. Install plugins
 
 Open Claude Code and run `/plugins`. See `marketplace-plugins.md` for our recommended starter set.
+
+## Security & automation on this repo
+
+Everything below is free for public repos. If you fork into a public repo of your own, the YAML-based parts (Dependabot, CodeQL) come along automatically; the repo-level toggles (secret scanning, branch protection) you enable once in your own Settings.
+
+| Feature | How it's enabled | What it does |
+|---------|------------------|--------------|
+| **Dependabot alerts + security updates** | GitHub repo setting | Flags and auto-PRs fixes for known CVEs in dependencies |
+| **Dependabot version updates** | `.github/dependabot.yml` | Weekly PRs bumping `github-actions`, `npm`, `pip` ecosystems |
+| **CodeQL scanning** | `.github/workflows/codeql.yml` | Scans workflow files for injection / unpinned actions on push, PR, and weekly cron |
+| **Secret scanning + push protection** | GitHub repo setting | Blocks committed or pushed provider tokens (AWS, GitHub, Stripe, etc.) |
+| **Branch protection ruleset on `main`** | Repo → Rules | Blocks force-push and branch deletion on `main`. No PR or review requirement — Elnora-AI members push directly. |
+
+External contributors can fork, open issues, and open PRs — that's GitHub's default model for public repos. They cannot push or merge.
 
 ## What is Claude Code?
 
