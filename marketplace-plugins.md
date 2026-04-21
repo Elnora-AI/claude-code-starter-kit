@@ -84,6 +84,25 @@ A few standouts:
 
 See the full list of 40+ plugins on [github.com/anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins).
 
+### 5. Elnora AI (`elnora-plugins`)
+
+**Source**: github.com/Elnora-AI/elnora-plugins
+**Trust level**: High — maintained by Elnora AI (the platform that powers this starter kit)
+**Status**: Registered with `autoUpdate: true`. No plugins enabled by default — browse and install via `/plugins`.
+
+| Plugin | What it gives you | Best for |
+|--------|-------------------|----------|
+| **elnora** | Elnora MCP server + 8 bioprotocol skills (`elnora-platform`, `-orgs`, `-projects`, `-tasks`, `-files`, `-folders`, `-search`, `-admin`) | Generating, versioning, and managing wet-lab protocols from Claude Code |
+
+Install hint:
+```
+/plugin install elnora@elnora-plugins
+```
+
+The MCP server is already pre-wired in `.mcp.json` (no manual install needed) —
+installing the plugin additionally loads the 8 skills. On first MCP call, a
+browser window opens for OAuth. Or run `elnora auth login` any time to pre-auth.
+
 ---
 
 ## Other Marketplaces (add later)

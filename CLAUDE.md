@@ -54,6 +54,9 @@ repo before requesting info from the user.
 Invoke slash commands directly (e.g., `/commit`) rather than reimplementing
 them.
 
+**Elnora CLI is available globally.** `elnora --version` should work in any
+terminal. Elnora's MCP tools are pre-wired in `.mcp.json` — OAuth on first use.
+
 ---
 
 ## Knowledge Base
@@ -67,24 +70,85 @@ so each user keeps their own copy.
 
 ### First-run setup
 
-If `.claude/knowledge-base.local.md` does not exist, Claude MUST on the first
-knowledge-base-related request:
+This subsection is **self-destructing scaffolding** — it runs exactly once on
+a freshly-cloned starter kit, then deletes itself from this file. If you're
+reading this, setup hasn't run yet.
 
-1. Ask the user these questions:
-   - **"Where is your knowledge base located?"** (absolute path to the vault
-     root — could be an Obsidian folder, Google Drive sync folder, OneDrive
-     folder, Dropbox folder, or plain local directory)
+Trigger this flow if **any** of the following is true:
+- `.claude/knowledge-base.local.md` does not exist, OR
+- It exists but `vault_path` is still the placeholder
+  `<ABSOLUTE_PATH_TO_YOUR_VAULT>` (someone copied the template without
+  filling it in), OR
+- `vault_path` points to a directory that does not exist on disk.
+
+Otherwise the config is already valid — skip the whole subsection.
+
+When triggered, Claude MUST on the first knowledge-base-related request:
+
+1. **Auto-detect candidate vaults first.** Before asking the user for a path,
+   use `Glob` to look for `.obsidian/` folders (a reliable vault marker) in
+   the common sync locations below. The workshop audience's vaults will almost
+   always be in Dropbox, OneDrive, Google Drive, iCloud, or a local folder —
+   so start there.
+
+   **macOS:**
+   - `~/Library/Mobile Documents/com~apple~CloudDocs/**/.obsidian` (iCloud)
+   - `~/Library/CloudStorage/GoogleDrive-*/**/.obsidian` (Google Drive)
+   - `~/Library/CloudStorage/OneDrive*/**/.obsidian` (OneDrive)
+   - `~/Library/CloudStorage/Dropbox/**/.obsidian` (Dropbox for Mac, new)
+   - `~/Dropbox/**/.obsidian` (Dropbox classic)
+   - `~/Documents/**/.obsidian` (plain local)
+
+   **Windows:**
+   - `C:/Users/*/OneDrive*/**/.obsidian`
+   - `C:/Users/*/Dropbox/**/.obsidian`
+   - `C:/Users/*/Documents/**/.obsidian`
+
+   If matches are found, present them as numbered options (e.g.,
+   `[1] /path/one  [2] /path/two`) and let the user pick by number or paste
+   a different absolute path. If nothing is found, fall back to asking for
+   an absolute path directly.
+
+2. Ask the user these follow-up questions:
+   - **"Where is your knowledge base located?"** (only if auto-detect found
+     nothing — otherwise the path is already chosen above)
    - **"Is there a specific sub-directory inside the vault you want me to
      default to?"** (optional — e.g., a company folder, a project folder, or
      leave blank to use the root)
    - **"Do you use standard task/policy sub-directories I should know about?"**
      (optional — e.g., `20-tasks/inbox.md`, `02-policies/internal`)
 
-2. Copy `.claude/knowledge-base.local.md.template` to
+3. Copy `.claude/knowledge-base.local.md.template` to
    `.claude/knowledge-base.local.md` and fill in the frontmatter with the
    user's answers. Delete any keys the user doesn't use.
 
-3. Confirm the path resolves by listing its contents before proceeding.
+4. **Verify the config — hard gate before anything else happens.** Do all
+   three of these checks and proceed only if every one passes:
+
+   a. Read back `.claude/knowledge-base.local.md` and confirm `vault_path`
+      is a real absolute path, NOT the `<ABSOLUTE_PATH_TO_YOUR_VAULT>`
+      placeholder and not empty.
+   b. `ls` (or `Glob`) the `vault_path` and confirm the directory actually
+      exists and is readable. Print a couple of filenames from inside it to
+      the user so they can confirm it looks right.
+   c. If `company_dir` was set, confirm that sub-directory also exists
+      inside the vault.
+
+   If any check fails, STOP. Do NOT proceed to step 5. Tell the user exactly
+   which check failed and what you found (e.g., "vault_path is set to
+   `/Users/.../foo` but that directory doesn't exist"), and ask them to
+   correct it. Re-run steps 3–4 after they respond.
+
+5. **Self-clean this CLAUDE.md.** ONLY after step 4 passes all three checks,
+   use the `Edit` tool to delete the entire `### First-run setup` subsection
+   from this file — the heading and every line through the end of this step 5.
+   Leave the `### Reading the config` paragraph below intact; that's the
+   permanent rule, not scaffolding.
+
+   Confirm the cleanup in your reply so the user knows `CLAUDE.md` changed
+   and why. Something like: "Vault verified at `/path/to/vault`, config
+   written to `.claude/knowledge-base.local.md`, and I trimmed the now-unused
+   First-run setup block from `CLAUDE.md` so it won't clutter future sessions."
 
 ### Reading the config
 

@@ -19,7 +19,7 @@ claude-code-starter-kit/
 ├── .gitignore                            # Keeps secrets, OS files, and build artifacts out of Git
 ├── LICENSE                               # MIT
 ├── .env.template                         # Template for environment variables (copy to .env)
-├── .mcp.json                             # Project MCP servers (context7, grep)
+├── .mcp.json                             # Project MCP servers (context7, grep, elnora)
 ├── .github/
 │   ├── dependabot.yml                   # Weekly dependency update PRs (github-actions, npm, pip)
 │   ├── workflows/codeql.yml             # CodeQL scans workflow files on push, PR, and weekly cron
@@ -38,14 +38,27 @@ claude-code-starter-kit/
 > vault (or any local folder) by copying `.claude/knowledge-base.local.md.template` to
 > `.claude/knowledge-base.local.md` and filling in the YAML frontmatter. See `CLAUDE.md` for details.
 
+## Powered by Elnora AI
+
+This starter kit ships with the [Elnora CLI](https://cli.elnora.ai) pre-installed
+by the setup script, the [`elnora-plugins`](https://github.com/Elnora-AI/elnora-plugins)
+marketplace pre-registered (auto-updating), and the Elnora MCP server wired into
+`.mcp.json`. Elnora is an AI platform for generating, optimizing, and managing
+bioprotocols for wet-lab experiments.
+
+After setup, run `elnora auth login` in any terminal — a browser window handles
+the rest. First use of an `elnora_*` MCP tool in Claude Code also triggers OAuth
+automatically, so there's nothing to configure by hand.
+
 ## Quick start
 
 ### 1. Install the toolchain
 
 On a fresh machine, run the one-liner for your OS. It downloads the starter kit (no git required),
-installs Claude Code first (zero dependencies), then installs Node.js, Git, Python, VS Code,
-GitHub CLI, and Obsidian — skipping anything already present. Output streams live AND tees to
-`~/claude-starter-install.log` so you can paste it in support chats.
+installs Claude Code first (zero dependencies), the Elnora CLI second (also zero dependencies),
+then installs Node.js, Git, Python, VS Code, GitHub CLI, and Obsidian — skipping anything already
+present. Output streams live AND tees to `~/claude-starter-install.log` so you can paste it in
+support chats.
 
 **macOS / Linux** (from Terminal):
 ```bash

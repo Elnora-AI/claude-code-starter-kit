@@ -2,9 +2,8 @@
 # Claude Code Setup — Windows
 # ============================================================
 # Installs a complete Claude Code development environment:
-# Node.js, Python, Claude Code CLI, GitHub CLI, and Obsidian.
-# (Assumes VS Code and Git are installed manually first — see
-# README.md.)
+# Claude Code CLI, Elnora CLI, Node.js, Git, Python, VS Code,
+# GitHub CLI, and Obsidian.
 #
 # Run from PowerShell:
 #   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -44,6 +43,11 @@ function Update-SessionPath {
     $claudeBin = Join-Path $env:USERPROFILE ".local\bin"
     if ((Test-Path $claudeBin) -and ($parts -notcontains $claudeBin)) {
         $parts += $claudeBin
+    }
+    # Elnora CLI installer writes to %USERPROFILE%\.elnora\bin — ensure it's present.
+    $elnoraBin = Join-Path $env:USERPROFILE ".elnora\bin"
+    if ((Test-Path $elnoraBin) -and ($parts -notcontains $elnoraBin)) {
+        $parts += $elnoraBin
     }
     $env:Path = ($parts -join ";")
 }
@@ -154,6 +158,25 @@ the exe into WindowsApps which is always in default user PATH:
 Docs: https://docs.claude.com/en/docs/claude-code/overview
 Verify in a NEW PowerShell window:
   claude --version
+'@
+    }
+    elseif ($Label -like "Elnora CLI*") {
+        return @'
+Try manually:
+  irm https://cli.elnora.ai/install.ps1 | iex
+npm fallback (requires Node.js, installed later in this script):
+  npm install -g @elnora-ai/cli
+If PowerShell blocks the install script with an execution policy error:
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  irm https://cli.elnora.ai/install.ps1 | iex
+The installer writes elnora.exe to %USERPROFILE%\.elnora\bin and updates
+User PATH. If PATH reverted (corporate Group Policy), copy the exe into
+WindowsApps (always on default user PATH):
+  Copy-Item "$env:USERPROFILE\.elnora\bin\elnora.exe" `
+            "$env:LOCALAPPDATA\Microsoft\WindowsApps\elnora.exe" -Force
+Docs: https://cli.elnora.ai
+Verify in a NEW PowerShell window:
+  elnora --version
 '@
     }
     elseif ($Label -like "GitHub CLI*") {
@@ -376,14 +399,20 @@ if (-not $hasWinget) {
     }
 }
 
-# --- [1/8] Claude Code CLI (installed FIRST — zero dependencies) ---
+# --- [1/9] Claude Code CLI (installed FIRST — zero dependencies) ---
 # Using Anthropic's native installer so Claude Code is the very first thing on
 # the machine. Works even when winget is missing (unlike the rest of the tools
 # below). Writes a self-contained binary to %USERPROFILE%\.local\bin\claude.exe.
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Host "[1/8] Installing Claude Code..." -ForegroundColor Green
+    Write-Host "[1/9] Installing Claude Code..." -ForegroundColor Green
     Write-Host "  Using Anthropic's native installer (no prerequisites required)." -ForegroundColor Gray
-    Invoke-Step "Claude Code" { irm https://claude.ai/install.ps1 | iex }
+    # Run the installer in a child powershell.exe. `iex` evaluates its input in
+    # caller scope, so an `exit N` inside the fetched installer would terminate
+    # setup-windows.ps1 itself — skipping every later step and the end-of-run
+    # recap. The sub-process contains `exit`, propagates the exit code back via
+    # $LASTEXITCODE for Invoke-Step to detect, and isolates any
+    # $ErrorActionPreference changes made by the installer.
+    Invoke-Step "Claude Code" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex" }
     Update-SessionPath
 
     # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
@@ -392,34 +421,84 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     # back to WindowsApps (default user PATH, GP-immune).
     $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
     $claudeExe    = Join-Path $claudeBinDir "claude.exe"
-    $userPath     = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ((Test-Path $claudeExe) -and ($userPath -notlike "*$claudeBinDir*")) {
-        Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
-        Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
-        if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
-            [void]$FailedSteps.Add("Claude Code PATH")
+    if (-not (Test-Path $claudeExe)) {
+        # Installer reported success but the binary isn't on disk. If Invoke-Step
+        # already logged a non-zero exit, skip to avoid duplicate entries in the
+        # recap — the existing failure already routes to the right remediation.
+        $alreadyLogged = @($FailedSteps | Where-Object { $_ -like "Claude Code*" }).Count -gt 0
+        if (-not $alreadyLogged) {
+            Write-Host "  [!] Installer completed but claude.exe is missing at $claudeExe." -ForegroundColor Red
+            [void]$FailedSteps.Add("Claude Code (binary not found after install)")
+        }
+    } else {
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if ($userPath -notlike "*$claudeBinDir*") {
+            Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+            Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
+                [void]$FailedSteps.Add("Claude Code PATH")
+            }
         }
     }
 } else {
-    Write-Host "[1/8] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
+    Write-Host "[1/9] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [2/8] Node.js ---
+# --- [2/9] Elnora CLI (installed SECOND — also zero dependencies) ---
+# Elnora's installer downloads a pre-built binary to %USERPROFILE%\.elnora\bin
+# and updates User PATH. No winget/Node required. "AI surfaces first,
+# toolchain second" mirrors the macOS script.
+if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
+    Write-Host "[2/9] Installing Elnora CLI..." -ForegroundColor Green
+    Write-Host "  Using Elnora's native installer (no prerequisites required)." -ForegroundColor Gray
+    # Sub-process isolation: see matching comment in the Claude Code block above.
+    # The Elnora installer has 8 `exit 1` paths (GitHub API failure, unsupported
+    # arch like ARM64, AV-blocked copy, etc.) — without the sub-process, any one
+    # of them would kill setup-windows.ps1 mid-run.
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://cli.elnora.ai/install.ps1 | iex" }
+    Update-SessionPath
+
+    # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
+    # if User PATH didn't pick up .elnora\bin.
+    $elnoraBinDir = Join-Path $env:USERPROFILE ".elnora\bin"
+    $elnoraExe    = Join-Path $elnoraBinDir "elnora.exe"
+    if (-not (Test-Path $elnoraExe)) {
+        $alreadyLogged = @($FailedSteps | Where-Object { $_ -like "Elnora CLI*" }).Count -gt 0
+        if (-not $alreadyLogged) {
+            Write-Host "  [!] Installer completed but elnora.exe is missing at $elnoraExe." -ForegroundColor Red
+            [void]$FailedSteps.Add("Elnora CLI (binary not found after install)")
+        }
+    } else {
+        $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+        if ($userPath -notlike "*$elnoraBinDir*") {
+            Write-Host "  [!] User PATH did not persist '.elnora\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+            Write-Host "      Attempting fallback: copy elnora.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            if (-not (Copy-StandaloneExeToWindowsApps -ExePath $elnoraExe -ToolName "elnora")) {
+                [void]$FailedSteps.Add("Elnora CLI PATH")
+            }
+        }
+    }
+    Write-Host "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)." -ForegroundColor Gray
+} else {
+    Write-Host "[2/9] Elnora CLI already installed. Skipping." -ForegroundColor Gray
+}
+
+# --- [3/9] Node.js ---
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "[2/8] Installing Node.js..." -ForegroundColor Green
+    Write-Host "[3/9] Installing Node.js..." -ForegroundColor Green
     Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[2/8] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
+    Write-Host "[3/9] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [3/8] Git + user config ---
+# --- [4/9] Git + user config ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[3/8] Installing Git..." -ForegroundColor Green
+    Write-Host "[4/9] Installing Git..." -ForegroundColor Green
     Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[3/8] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
+    Write-Host "[4/9] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
 }
 
 if (Get-Command git -ErrorAction SilentlyContinue) {
@@ -468,11 +547,11 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     Write-Host "      See the Git remediation in the recap at the end of this run." -ForegroundColor Red
 }
 
-# --- [4/8] Python 3.12 ---
+# --- [5/9] Python 3.12 ---
 # Test-RealPython rejects the Microsoft Store stub alias — Get-Command alone
 # would return a false positive on a fresh Windows laptop.
 if (-not (Test-RealPython)) {
-    Write-Host "[4/8] Installing Python 3.12..." -ForegroundColor Green
+    Write-Host "[5/9] Installing Python 3.12..." -ForegroundColor Green
     # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
     [void](Remove-PythonStoreAlias)
     Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements }
@@ -512,10 +591,10 @@ if (-not (Test-RealPython)) {
         }
     }
 } else {
-    Write-Host "[4/8] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
+    Write-Host "[5/9] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [5/8] VS Code ---
+# --- [6/9] VS Code ---
 $codePaths = @(
     "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
     "$env:ProgramFiles\Microsoft VS Code\Code.exe",
@@ -523,16 +602,16 @@ $codePaths = @(
 )
 $codeInstalled = (Get-Command code -ErrorAction SilentlyContinue) -or ($codePaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
 if (-not $codeInstalled) {
-    Write-Host "[5/8] Installing VS Code..." -ForegroundColor Green
+    Write-Host "[6/9] Installing VS Code..." -ForegroundColor Green
     Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[5/8] VS Code already installed. Skipping." -ForegroundColor Gray
+    Write-Host "[6/9] VS Code already installed. Skipping." -ForegroundColor Gray
 }
 
-# --- [6/8] GitHub CLI ---
+# --- [7/9] GitHub CLI ---
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Write-Host "[6/8] Installing GitHub CLI..." -ForegroundColor Green
+    Write-Host "[7/9] Installing GitHub CLI..." -ForegroundColor Green
     Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 
@@ -559,10 +638,10 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         }
     }
 } else {
-    Write-Host "[6/8] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
+    Write-Host "[7/9] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
 }
 
-# --- [7/8] Obsidian (optional — knowledge base) ---
+# --- [8/9] Obsidian (optional — knowledge base) ---
 $obsidianPaths = @(
     "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
     "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
@@ -577,17 +656,17 @@ if (-not $obsidianInstalled) {
     if ($wingetHas) { $obsidianInstalled = $true }
 }
 if (-not $obsidianInstalled) {
-    Write-Host "[7/8] Installing Obsidian (optional)..." -ForegroundColor Green
+    Write-Host "[8/9] Installing Obsidian (optional)..." -ForegroundColor Green
     Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[7/8] Obsidian already installed. Skipping." -ForegroundColor Gray
+    Write-Host "[8/9] Obsidian already installed. Skipping." -ForegroundColor Gray
 }
 
-# --- [8/8] Projects folder ---
+# --- [9/9] Projects folder ---
 $projectsDir = "$env:USERPROFILE\Documents\Projects"
 if (-not (Test-Path $projectsDir)) {
-    Write-Host "[8/8] Creating Projects folder at $projectsDir..." -ForegroundColor Green
+    Write-Host "[9/9] Creating Projects folder at $projectsDir..." -ForegroundColor Green
     try {
         New-Item -ItemType Directory -Path $projectsDir -ErrorAction Stop | Out-Null
         Write-Host "  Done." -ForegroundColor Yellow
@@ -598,7 +677,7 @@ if (-not (Test-Path $projectsDir)) {
         [void]$FailedSteps.Add("Projects folder")
     }
 } else {
-    Write-Host "[8/8] Projects folder already exists. Skipping." -ForegroundColor Gray
+    Write-Host "[9/9] Projects folder already exists. Skipping." -ForegroundColor Gray
 }
 
 Write-Host ""
@@ -648,6 +727,7 @@ if ($vscodeExe) {
 }
 
 Write-Host "  Claude Code: $(Get-ToolVersion 'claude')" -ForegroundColor White
+Write-Host "  Elnora CLI:  $(Get-ToolVersion 'elnora')" -ForegroundColor White
 Write-Host "  GitHub CLI:  $(Get-ToolVersion 'gh')" -ForegroundColor White
 $obsidianExe = @(
     "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
@@ -700,18 +780,23 @@ if ($FailedSteps.Count -gt 0) {
 }
 
 Write-Host "Next steps (interactive — these need your browser/input):" -ForegroundColor White
-Write-Host "  1. Authenticate Claude Code:  claude          (log in, then /exit)"
-Write-Host "  2. Authenticate GitHub CLI:   gh auth login   (GitHub.com -> HTTPS -> browser)"
-Write-Host "  3. Create your first project repo:"
+Write-Host "  1. Authenticate Claude Code:  claude             (log in, then /exit)"
+Write-Host "  2. Authenticate Elnora AI:    elnora auth login  (opens browser for OAuth)"
+Write-Host "  3. Authenticate GitHub CLI:   gh auth login      (GitHub.com -> HTTPS -> browser)"
+Write-Host "  4. Create your first project repo:"
 Write-Host "       cd `$env:USERPROFILE\Documents\Projects"
 Write-Host "       gh repo create my-project --private --add-readme --clone"
 Write-Host "       cd my-project; code ."
-Write-Host "  4. In VS Code terminal:  claude   then   /install-github-app"
-Write-Host "  5. Copy starter kit into your repo:"
+Write-Host "  5. In VS Code terminal:  claude   then   /install-github-app"
+Write-Host "  6. Copy starter kit into your repo:"
 Write-Host "       git clone https://github.com/Elnora-AI/claude-code-starter-kit.git temp-starter"
 Write-Host "       robocopy temp-starter . /E /XD .git"
 Write-Host "       Remove-Item temp-starter -Recurse -Force"
-Write-Host "  6. (Optional) Create an Obsidian vault inside a OneDrive folder."
+Write-Host "  7. (Optional) Create an Obsidian vault in OneDrive, Google Drive,"
+Write-Host "     or Dropbox (or plain local). The starter kit's Claude will ask"
+Write-Host "     for your vault path on first knowledge-base use — it auto-detects"
+Write-Host "     Obsidian vaults in common sync folders, so just have one ready"
+Write-Host "     and Claude will find it."
 Write-Host ""
 
 # Close the transcript so the log file is flushed and released.

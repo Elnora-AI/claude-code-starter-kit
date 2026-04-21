@@ -84,6 +84,29 @@ Claude Code updates automatically. For plugins:
 2. Check for updates in your installed plugins
 3. Update as needed
 
+Marketplaces registered in this starter kit have `autoUpdate: true`, so Claude
+Code pulls the latest definitions at session start. The Elnora CLI nags you
+in its own output when a new version ships — re-running the setup script is
+idempotent and upgrades in place.
+
+---
+
+## Authenticate Elnora AI
+
+The setup script installs the Elnora CLI and pre-wires the hosted MCP server at
+`https://mcp.elnora.ai/mcp`. To authenticate once for every surface (CLI + MCP
+tools in Claude Code):
+
+```bash
+elnora auth login
+```
+
+This opens a browser, completes OAuth, and caches credentials in `~/.elnora/`.
+Switch profiles later with `elnora auth profiles`.
+
+If you haven't run `elnora auth login` and Claude Code needs an Elnora MCP tool,
+the first call opens a browser OAuth flow automatically — nothing to configure.
+
 ---
 
 ## Getting help

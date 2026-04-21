@@ -64,31 +64,43 @@
       "source": {
         "source": "git",
         "url": "https://github.com/anthropics/claude-code.git"
-      }
+      },
+      "autoUpdate": true
     },
     "claude-code-workflows": {
       "source": {
         "source": "git",
         "url": "https://github.com/wshobson/agents.git"
-      }
+      },
+      "autoUpdate": true
     },
     "claude-plugins-official": {
       "source": {
         "source": "git",
         "url": "https://github.com/anthropics/claude-plugins-official.git"
-      }
+      },
+      "autoUpdate": true
     },
     "anthropic-agent-skills": {
       "source": {
         "source": "git",
         "url": "https://github.com/anthropics/skills.git"
-      }
+      },
+      "autoUpdate": true
     },
     "knowledge-work-plugins": {
       "source": {
         "source": "git",
         "url": "https://github.com/anthropics/knowledge-work-plugins.git"
-      }
+      },
+      "autoUpdate": true
+    },
+    "elnora-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Elnora-AI/elnora-plugins.git"
+      },
+      "autoUpdate": true
     }
   }
 }
