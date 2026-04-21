@@ -13,12 +13,12 @@ Anything that is:
 - **Transient** — log files from scripts, scratch images/screenshots
 - **Local-only** — per-machine state that shouldn't be shared via Git
 
-Examples from sibling repos:
+Examples:
 
-- `*-sync-state.json` — last-run state for recurring jobs
-- `*.log` — rolling logs from scheduled scripts
-- `name-cache.json` — cached lookups to avoid repeated API calls
-- `logos/`, `*-frame.jpg` — downloaded or generated media
+- `*.log` — rolling logs from scripts you run locally
+- `*-state.json` — last-run state for recurring jobs
+- `*-cache.json` — cached API lookups to avoid rate limits
+- downloaded images, generated thumbnails, scratch screenshots
 
 ## What does NOT go here
 
