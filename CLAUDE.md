@@ -45,6 +45,19 @@ If the project runs on more than one OS, avoid shell-specific syntax. Prefer
 
 ---
 
+## Permission scope
+
+The `permissions.deny` list in `.claude/settings.json` is a **speed-bump,
+not a security boundary.** It blocks the exact surface form of commands
+Claude is most likely to emit (`rm -rf …`, `sudo …`, `git push --force`).
+It will not catch absolute-path variants (`/bin/rm`), quoted subshells
+(`bash -c '…'`), or different tools (`find -delete`, `python -c "…"`).
+For real enforcement, use [sandboxing](https://code.claude.com/docs/en/sandboxing)
+or a [PreToolUse hook](https://code.claude.com/docs/en/hooks-guide)
+that parses commands instead of pattern-matching their surface form.
+
+---
+
 ## How to Work With Claude Here
 
 **Search before asking.** Use `Glob` → `Grep` → `Read` to find context in the

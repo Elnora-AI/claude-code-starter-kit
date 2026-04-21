@@ -14,10 +14,10 @@
       "Task",
       "NotebookEdit",
       "Monitor",
+      "Bash",
       "mcp__context7__*",
       "mcp__grep__*",
-      "mcp__elnora__*",
-      "Bash(*)"
+      "mcp__elnora__*"
     ],
     "deny": [
       "Bash(git push --force*)",
@@ -25,21 +25,31 @@
       "Bash(git push --force-with-lease*)",
       "Bash(git reset --hard*)",
       "Bash(git clean -f*)",
+      "Bash(git clean -fd*)",
       "Bash(git checkout -- .)",
       "Bash(git stash drop*)",
       "Bash(git stash clear*)",
+
       "Bash(rm -rf *)",
-      "Bash(del /s /q *)",
-      "Bash(rmdir /s /q *)",
+      "Bash(rm -fr *)",
+      "Bash(rm -rf /*)",
+
+      "Bash(sudo *)",
+      "Bash(su -*)",
+      "Bash(doas *)",
+
       "Bash(Remove-Item * -Recurse*)",
       "Bash(Remove-Item * -Force*)",
+      "Bash(del /s /q *)",
+      "Bash(rmdir /s /q *)",
+
+      "Bash(shutdown*)",
+      "Bash(reboot*)",
+      "Bash(halt*)",
+
       "Bash(docker system prune*)",
       "Bash(docker volume rm*)",
-      "Bash(docker volume prune*)",
-      "Bash(dotnet ef database drop*)",
-      "Bash(format *)",
-      "Bash(shutdown*)",
-      "Bash(restart*)"
+      "Bash(docker volume prune*)"
     ]
   },
   "hooks": {},
