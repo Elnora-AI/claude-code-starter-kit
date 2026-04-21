@@ -2,7 +2,7 @@
 
 A ready-to-use project scaffold for working with [Claude Code](https://claude.ai/code) — Anthropic's AI coding agent that lives in your terminal and editor.
 
-This kit gives you a solid starting point: project instructions for Claude, sensible permissions, a curated plugin list, and an example knowledge base folder you can use with Obsidian.
+This kit gives you a solid starting point: project instructions for Claude, sensible permissions, and a curated plugin list.
 
 ## What's inside
 
@@ -12,7 +12,7 @@ claude-code-starter-kit/
 ├── TOOLS.md                              # Catalog of tools, plugins, and integrations you add over time
 ├── README.md                             # You are here
 ├── marketplace-plugins.md                # Curated list of safe plugin marketplaces and recommendations
-├── install.sh                            # One-liner bootstrap for macOS/Linux (downloads + runs setup-mac.sh)
+├── install.sh                            # One-liner bootstrap for macOS (downloads + runs setup-mac.sh)
 ├── install.ps1                           # One-liner bootstrap for Windows (downloads + runs setup-windows.ps1)
 ├── setup-mac.sh                          # Full install script for macOS
 ├── setup-windows.ps1                     # Full install script for Windows
@@ -60,7 +60,7 @@ then installs Node.js, Git, Python, VS Code, GitHub CLI, and Obsidian — skippi
 present. Output streams live AND tees to `~/claude-starter-install.log` so you can paste it in
 support chats.
 
-**macOS / Linux** (from Terminal):
+**macOS** (from Terminal):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.sh | bash
 ```
@@ -83,9 +83,10 @@ Restart your shell afterwards — the setup script also tells you this at the en
 ### 2. Copy this kit into your project
 
 ```bash
-# Option A: Clone and copy
-git clone https://github.com/Elnora-AI/claude-code-starter-kit.git
-cp -r claude-code-starter-kit/* claude-code-starter-kit/.* your-project/
+# Option A: Clone and copy (from inside your-project/)
+git clone https://github.com/Elnora-AI/claude-code-starter-kit.git temp-starter
+rsync -a --exclude '.git' temp-starter/ .
+rm -rf temp-starter
 
 # Option B: Have Claude do it
 # Open your project in VS Code, start Claude Code, and say:
