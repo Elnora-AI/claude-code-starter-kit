@@ -36,6 +36,11 @@ claude-code-starter-kit/
 > `.claude/knowledge-base.local.md.template` to `.claude/knowledge-base.local.md` and filling in
 > the YAML frontmatter. See `CLAUDE.md` for details.
 
+> **Experimental flag**: `.claude/settings.json` sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`,
+> which enables Claude Code's multi-agent teams feature (lets you spawn named subagents that can
+> message each other). If you'd rather stay on stock behavior, remove the `env` block from
+> `.claude/settings.json`.
+
 ## Powered by Elnora AI
 
 Pre-installed and pre-wired by the setup script:
