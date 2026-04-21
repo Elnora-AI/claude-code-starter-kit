@@ -1,7 +1,6 @@
 # CodeQL — GitHub's native static analysis for security vulnerabilities
 # Docs: https://docs.github.com/code-security/code-scanning
 #
-# To enable: rename this file to `codeql.yml`
 # Edit the `languages` matrix to match your project's languages.
 
 name: CodeQL
