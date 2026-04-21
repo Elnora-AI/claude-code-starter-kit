@@ -54,6 +54,7 @@ These marketplaces are configured in `.claude/settings.json`. Browse them with `
 | **claude-code-workflows** | [wshobson/agents](https://github.com/wshobson/agents) | Community workflow plugins |
 | **claude-plugins-official** | [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | More official plugins |
 | **anthropic-agent-skills** | [anthropics/skills](https://github.com/anthropics/skills) | Document processing skills |
+| **knowledge-work-plugins** | [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Knowledge-work plugins (sales, finance, legal, HR, marketing, product, support, data, design, bio-research, etc.) — registered, no plugins enabled by default |
 
 ---
 
@@ -110,5 +111,5 @@ These tools are built into Claude Code — no setup needed.
 
 ---
 
-_Last updated: 2026-04-14_
+_Last updated: 2026-04-21_
 

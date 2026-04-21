@@ -59,6 +59,31 @@ What `document-skills` adds:
 | **stripe** | Stripe payment integration helpers | Finance / billing teams |
 | **frontend-design** | Production-quality UI/web design | Designers and frontend devs |
 
+### 4. Knowledge Work (`knowledge-work-plugins`)
+
+**Source**: github.com/anthropics/knowledge-work-plugins
+**Trust level**: High — official Anthropic knowledge-work marketplace
+**Status**: Registered, **no plugins enabled by default** — browse and install what you need via `/plugins`.
+
+Curated plugins for non-engineering knowledge work: sales, finance, legal, HR, marketing, product, customer support, data, design, operations, bio-research. Also includes partner-built integrations (Slack, Apollo, Zapier, Intercom, Figma, Prisma, CockroachDB, PlanetScale, Cloudinary, Sanity, Zoom, ZoomInfo, and more).
+
+A few standouts:
+
+| Plugin | What it gives you | Best for |
+|--------|-------------------|----------|
+| **productivity** | Task management, daily planning, memory of recurring context | Everyone |
+| **enterprise-search** | One-stop search across email, chat, docs, wikis | Anyone juggling multiple tools |
+| **sales** | Prospecting, outreach drafting, deal strategy, call prep | Sales / GTM |
+| **finance** | Journal entries, reconciliation, variance analysis, audit prep | Finance / accounting |
+| **legal** | Contract review, NDA triage, compliance workflows | In-house legal |
+| **marketing** | Content creation, campaign planning, performance analysis | Marketing |
+| **product-management** | Feature specs, roadmaps, user research synthesis | PMs |
+| **customer-support** | Ticket triage, response drafting, escalation, KB building | Support teams |
+| **bio-research** | Literature search, genomics, preclinical research tooling | Life sciences |
+| **cowork-plugin-management** | Create and customize plugins tailored to your org | Plugin authors |
+
+See the full list of 40+ plugins on [github.com/anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins).
+
 ---
 
 ## Other Marketplaces (add later)

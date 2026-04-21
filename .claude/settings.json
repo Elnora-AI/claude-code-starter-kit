@@ -83,6 +83,12 @@
         "source": "git",
         "url": "https://github.com/anthropics/skills.git"
       }
+    },
+    "knowledge-work-plugins": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/anthropics/knowledge-work-plugins.git"
+      }
     }
   }
 }
