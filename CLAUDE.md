@@ -156,10 +156,6 @@ When Claude needs vault paths, it loads `.claude/knowledge-base.local.md` and
 resolves values from the YAML frontmatter. **Never hardcode vault paths
 anywhere else** — always read them from this file.
 
-The temporary `knowledge-base/` folder at the repo root is just an example
-scaffold with sample notes. Real users are expected to replace it with a
-pointer to their own vault via the config file above.
-
 ---
 
 ## Conventions
@@ -189,4 +185,4 @@ pointer to their own vault via the config file above.
 |------|--------------|
 | `TOOLS.md` | Looking up plugins, MCP servers, or custom commands |
 | `docs/getting-started.md` | Re-reading setup instructions |
-| `knowledge-base/README.md` | Working with the knowledge base |
+| `.claude/knowledge-base.local.md` | Resolving vault paths when working with the knowledge base |

@@ -16,6 +16,7 @@
       "Monitor",
       "mcp__context7__*",
       "mcp__grep__*",
+      "mcp__elnora__*",
       "Bash(*)"
     ],
     "deny": [
