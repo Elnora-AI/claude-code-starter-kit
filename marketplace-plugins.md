@@ -157,4 +157,16 @@ Select the plugin you want to remove and choose "Uninstall."
 3. Enter the marketplace name and GitHub URL
 4. The marketplace will appear in your list
 
-You can also edit `.claude/settings.json` directly — add an entry to the `pluginMarketplaces` array.
+You can also edit `.claude/settings.json` directly — add an entry to the `extraKnownMarketplaces` object, keyed by marketplace name. Example:
+
+```json
+"extraKnownMarketplaces": {
+  "my-marketplace": {
+    "source": {
+      "source": "git",
+      "url": "https://github.com/owner/repo.git"
+    },
+    "autoUpdate": true
+  }
+}
+```

@@ -83,7 +83,7 @@ _Add project-specific MCP servers to `.mcp.json` as needed._
 ## Elnora CLI
 
 Installed globally by `setup-mac.sh` / `setup-windows.ps1` (step [2/N], right after Claude Code).
-The binary lives in `~/.local/bin/elnora` on macOS/Linux and `%USERPROFILE%\.elnora\bin\elnora.exe` on Windows.
+The binary lives in `~/.local/bin/elnora` on macOS and `%USERPROFILE%\.elnora\bin\elnora.exe` on Windows.
 
 Headline commands:
 

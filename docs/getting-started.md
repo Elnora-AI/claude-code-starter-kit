@@ -28,13 +28,20 @@ You don't need special syntax. Just describe what you want in plain English:
 
 ### Use your knowledge base
 
-Put `.md` (markdown) files in your `knowledge-base/` folder. Then ask Claude:
+Point Claude at your own markdown notes — an Obsidian vault synced via
+Dropbox/Google Drive/OneDrive/iCloud, or just a plain folder of `.md` files.
+The vault path lives in `.claude/knowledge-base.local.md` (gitignored, one per
+machine). If that file doesn't exist yet, just ask Claude something like
+"search my knowledge base for X" — it runs the first-run setup, auto-detects
+candidate vaults, and writes the config for you.
+
+Once configured, try:
 
 - "What's in my knowledge base about [topic]?"
 - "Search the knowledge base for [keyword]"
 - "Read the meeting notes from April 14"
 
-The more files you add, the more useful this becomes. Think of it as Claude's memory for your project.
+The more files you have in the vault, the more useful this becomes.
 
 ### Try the plugins you installed
 

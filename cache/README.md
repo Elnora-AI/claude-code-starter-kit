@@ -23,7 +23,7 @@ Examples from sibling repos:
 ## What does NOT go here
 
 - Source code (goes in `src/`)
-- Knowledge base notes (goes in `knowledge-base/`)
+- Knowledge base notes (live in your vault — see `.claude/knowledge-base.local.md`)
 - Documentation (goes in `docs/`)
 - Config or secrets (use `.env` or `.claude/`)
 
