@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Claude Code Starter Kit — One-liner Installer (macOS / Linux)
+# Claude Code Starter Kit — One-liner Installer (macOS)
 # ============================================================
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.sh | bash

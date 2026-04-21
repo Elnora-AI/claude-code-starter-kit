@@ -452,9 +452,10 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     Write-Host "[2/9] Installing Elnora CLI..." -ForegroundColor Green
     Write-Host "  Using Elnora's native installer (no prerequisites required)." -ForegroundColor Gray
     # Sub-process isolation: see matching comment in the Claude Code block above.
-    # The Elnora installer has 8 `exit 1` paths (GitHub API failure, unsupported
-    # arch like ARM64, AV-blocked copy, etc.) — without the sub-process, any one
-    # of them would kill setup-windows.ps1 mid-run.
+    # The Elnora installer has 8 `exit 1` paths (GitHub API failure, 404 on
+    # ARM64 Windows since no win-arm64 asset is published, AV-blocked copy,
+    # etc.) — without the sub-process, any one of them would kill
+    # setup-windows.ps1 mid-run.
     Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://cli.elnora.ai/install.ps1 | iex" }
     Update-SessionPath
 

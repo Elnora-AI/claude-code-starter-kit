@@ -52,7 +52,12 @@ if (Test-Path $TargetDir) {
         Write-Host "    Reason: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "    Check your internet connection and retry:" -ForegroundColor Red
         Write-Host "      irm https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Branch/install.ps1 | iex" -ForegroundColor Red
-        exit 1
+        # `throw` instead of `exit 1`: this script is invoked via `irm ... | iex`,
+        # which runs in the caller's scope. `exit` would terminate the caller's
+        # shell/parent script silently; `throw` surfaces as a catchable error and
+        # still halts this installer if uncaught. Same reasoning as Bug 2 in the
+        # elnora-cli handoff doc.
+        throw "Starter kit bootstrap: failed to download from $zipUrl ($($_.Exception.Message))"
     } finally {
         if (Test-Path $zipPath)       { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
         if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force -ErrorAction SilentlyContinue }
