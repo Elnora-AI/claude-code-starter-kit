@@ -1,7 +1,6 @@
 # Dependabot — automated dependency updates
 # Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates
 #
-# To enable: rename this file to `dependabot.yml`
 # Remove any ecosystem blocks that don't apply to your project.
 
 version: 2

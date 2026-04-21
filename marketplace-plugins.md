@@ -115,10 +115,15 @@ You can add them via `/plugins` > "Add marketplace" when you're ready.
 **Source**: github.com/wshobson/agents
 **What's in it**: 15+ plugins covering backend development, Python, databases, security, testing, observability, and more. Best for development teams.
 
-### Superpowers (`superpowers-marketplace`)
+### Superpowers — alternate source (`superpowers-marketplace`)
 
 **Source**: github.com/obra/superpowers-marketplace
 **What's in it**: Advanced workflow skills — brainstorming, TDD, systematic debugging, parallel agent dispatch. Best for power users.
+
+> **Note**: this kit already enables `superpowers` from the Anthropic-maintained
+> `claude-plugins-official` marketplace (see `.claude/settings.json`). The obra
+> marketplace is a community-maintained alternate source for the same spirit of
+> plugin — only add it if you specifically want obra's variant.
 
 ---
 
