@@ -35,7 +35,20 @@ if (Test-Path $TargetDir) {
     $tmpExtractDir = Join-Path $env:TEMP "$RepoName-bootstrap"
 
     try {
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+        # Retry up to 3 times on flaky networks (hotel / conference wifi).
+        # -TimeoutSec caps the whole request; retries cover transient DNS/TLS
+        # hiccups that return immediately instead of hanging.
+        $maxAttempts = 3
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 300
+                break
+            } catch {
+                if ($attempt -eq $maxAttempts) { throw }
+                Write-Host "  Download attempt $attempt failed: $($_.Exception.Message). Retrying in 2s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 2
+            }
+        }
         if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force }
         Expand-Archive -Path $zipPath -DestinationPath $tmpExtractDir -Force
 
