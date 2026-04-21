@@ -34,7 +34,7 @@ else
     TMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TMP_DIR"' EXIT
 
-    if curl -fsSL "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
+    if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
         mkdir -p "$(dirname "$TARGET_DIR")"
         mv "$TMP_DIR/$REPO_NAME-$BRANCH" "$TARGET_DIR"
         echo "Extracted to $TARGET_DIR"

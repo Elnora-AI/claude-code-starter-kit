@@ -56,10 +56,15 @@ EOF
         Node.js*)
             cat <<'EOF'
 Try manually:
-  brew install node
+  brew install node@22
+  brew link --force --overwrite node@22
 Verify in a NEW terminal window:
-  node --version       # should print vXX.X.X
+  node --version       # should print v22.x.x
   npm --version
+node@22 is keg-only on Homebrew — the `brew link --force --overwrite` step
+is required for `node` to appear in /opt/homebrew/bin. If you prefer the
+latest Node instead of the pinned LTS, run `brew install node` — but your
+Node major may then differ from the Windows workshop script's pin.
 If 'brew: command not found', brew itself isn't on PATH — fix that first
 (see the Homebrew remediation above) and re-run this script.
 EOF
@@ -89,16 +94,19 @@ EOF
         "Python 3"*)
             cat <<'EOF'
 Try manually:
-  brew install python
+  brew install python@3.12
+  brew link --force --overwrite python@3.12
 Verify:
-  python3 --version
-  which python3        # should NOT be /usr/bin/python3 (that's the Xcode stub)
-If python3 still resolves to /usr/bin/python3 after install:
+  python3 --version      # should print "Python 3.12.x"
+  which python3          # should NOT be /usr/bin/python3 (that's the Xcode stub)
+python@3.12 is keg-only on Homebrew — the `brew link --force --overwrite`
+step is required for `python3` to appear in /opt/homebrew/bin.
+If python3 still resolves to /usr/bin/python3 or a stale version after install:
   1. Open a NEW terminal (or: eval "$(/opt/homebrew/bin/brew shellenv)")
   2. Run `which python3` again
-  3. If still wrong, your PATH has /usr/bin BEFORE /opt/homebrew/bin —
-     fix the order in ~/.zprofile. The brew shellenv line should be the
-     LAST PATH-modifying line in the file.
+  3. If still wrong, your PATH has /usr/bin (or another prefix with an old
+     python3) BEFORE /opt/homebrew/bin — fix the order in ~/.zprofile. The
+     brew shellenv line should be the LAST PATH-modifying line in the file.
 EOF
             ;;
         "VS Code"*)
@@ -249,7 +257,11 @@ if ! xcode-select -p &>/dev/null; then
     echo "      \"Command Line Tools for Xcode\" from Apple's Developer Downloads:"
     echo "        https://developer.apple.com/download/all/?q=command%20line%20tools"
     echo ""
-    exit 0
+    # Exit non-zero so the curl | bash bootstrap (and any wrapping terminal)
+    # surfaces this as a failure. Exiting 0 here made the one-liner appear
+    # to succeed while no real setup had happened — the user would close the
+    # terminal, open VS Code, and find nothing worked.
+    exit 1
 fi
 
 # --- [1/10] Claude Code CLI (installed FIRST — zero dependencies) ---
@@ -382,10 +394,25 @@ else
     fi
 fi
 
-# --- [4/10] Node.js ---
-if ! command -v node &> /dev/null; then
-    echo "[4/10] Installing Node.js..."
-    run_step "Node.js" brew install node && echo "  Done. Version: $(node --version)"
+# --- [4/10] Node.js 22 LTS (pinned for Mac/Windows parity) ---
+# Pinned to the 22.x LTS line so Mac and Windows workshop attendees land on the
+# same major. node@22 is keg-only on Homebrew — without `brew link --force
+# --overwrite` no `node` symlink appears in /opt/homebrew/bin and the rest of
+# this script's `command -v node` checks fail.
+node_major_ok=false
+if command -v node &> /dev/null; then
+    node_major="$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')"
+    if [ -n "$node_major" ] && [ "$node_major" -ge 22 ]; then
+        node_major_ok=true
+    fi
+fi
+if ! $node_major_ok; then
+    echo "[4/10] Installing Node.js 22 LTS..."
+    if run_step "Node.js" brew install node@22; then
+        brew link --force --overwrite node@22 &>/dev/null || true
+        hash -r 2>/dev/null || true
+        echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed — restart terminal')"
+    fi
 else
     echo "[4/10] Node.js already installed: $(node --version). Skipping."
 fi
@@ -439,14 +466,26 @@ else
     echo "      See the Git remediation in the recap at the end of this run." >&2
 fi
 
-# --- [6/10] Python 3 ---
-# Use plain `brew install python` (the "main" formula). `brew install python@3.12`
-# is keg-only — it installs to /opt/homebrew/opt/python@3.12/ without creating a
-# `python3` symlink in /opt/homebrew/bin, so users end up with only the Xcode stub
-# at /usr/bin/python3 (which prompts for Xcode every time).
-if ! command -v python3 &> /dev/null || [[ "$(command -v python3)" == "/usr/bin/python3" ]]; then
-    echo "[6/10] Installing Python 3..."
-    run_step "Python 3" brew install python && echo "  Done. Version: $(python3 --version 2>/dev/null)"
+# --- [6/10] Python 3.12 (pinned for Mac/Windows parity) ---
+# Pinned to match the Windows script's `Python.Python.3.12` winget package so
+# workshop attendees on different OSes end up on the same minor. python@3.12 is
+# keg-only on Homebrew, but `brew link --force --overwrite` creates the
+# /opt/homebrew/bin/python3 symlink the rest of this script's `command -v`
+# checks rely on. A version-floor probe (not just `command -v`) catches stale
+# python3 binaries on PATH (old python.org installer, leftover 3.8, etc.).
+python_version_ok=false
+if command -v python3 &> /dev/null && [[ "$(command -v python3)" != "/usr/bin/python3" ]]; then
+    if python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)' 2>/dev/null; then
+        python_version_ok=true
+    fi
+fi
+if ! $python_version_ok; then
+    echo "[6/10] Installing Python 3.12..."
+    if run_step "Python 3.12" brew install python@3.12; then
+        brew link --force --overwrite python@3.12 &>/dev/null || true
+        hash -r 2>/dev/null || true
+        echo "  Done. Version: $(python3 --version 2>/dev/null || echo 'installed — restart terminal')"
+    fi
 else
     echo "[6/10] Python already installed: $(python3 --version). Skipping."
 fi
