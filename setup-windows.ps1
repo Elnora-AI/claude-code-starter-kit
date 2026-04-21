@@ -412,7 +412,13 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     # recap. The sub-process contains `exit`, propagates the exit code back via
     # $LASTEXITCODE for Invoke-Step to detect, and isolates any
     # $ErrorActionPreference changes made by the installer.
-    Invoke-Step "Claude Code" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex" }
+    #
+    # The leading SecurityProtocol assignment forces TLS 1.2. powershell.exe =
+    # Windows PowerShell 5.1, which on older/unpatched Windows 10 builds
+    # defaults to SSL3/TLS 1.0. Modern CDNs (claude.ai, cli.elnora.ai) reject
+    # that handshake and `irm` fails with an opaque "underlying connection was
+    # closed" error the FAILURE box can't explain.
+    Invoke-Step "Claude Code" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://claude.ai/install.ps1 | iex" }
     Update-SessionPath
 
     # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
@@ -456,7 +462,9 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     # ARM64 Windows since no win-arm64 asset is published, AV-blocked copy,
     # etc.) — without the sub-process, any one of them would kill
     # setup-windows.ps1 mid-run.
-    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "irm https://cli.elnora.ai/install.ps1 | iex" }
+    # Leading SecurityProtocol assignment forces TLS 1.2 on PS 5.1 — see the
+    # Claude Code block above for the full reasoning.
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://cli.elnora.ai/install.ps1 | iex" }
     Update-SessionPath
 
     # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
