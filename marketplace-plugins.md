@@ -27,12 +27,15 @@ These marketplaces are already configured in your `.claude/settings.json`:
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
-| **commit-commands** | `/commit` and `/commit-push-pr` commands | Everyone — makes Git easier |
-| **feature-dev** | Guided feature development workflow | Developers building features |
+| **commit-commands** ⭐ | `/commit` and `/commit-push-pr` commands | Everyone — makes Git easier |
+| **feature-dev** ⭐ | Guided feature development workflow | Developers building features |
+| **plugin-dev** ⭐ | Tools for creating your own plugins | Plugin developers |
+| **security-guidance** ⭐ | Security best practices and vulnerability checks | Everyone |
 | **pr-review-toolkit** | PR review with multiple specialized reviewers | Teams doing code reviews |
 | **code-review** | Code review command | Reviewing pull requests |
 | **hookify** | Create rules to prevent unwanted behaviors | Advanced users |
-| **plugin-dev** | Tools for creating your own plugins | Plugin developers |
+
+⭐ = enabled by default in this starter kit (see `.claude/settings.json`).
 
 ### 2. Anthropic Skills (`anthropic-agent-skills`)
 
@@ -51,13 +54,20 @@ What `document-skills` adds:
 
 ### 3. Official Extras (`claude-plugins-official`)
 
-**Source**: github.com/anthropics/claude-code
+**Source**: github.com/anthropics/claude-plugins-official
 **Trust level**: High — official Anthropic extras
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
+| **claude-md-management** ⭐ | Audit and improve CLAUDE.md files | Everyone |
+| **superpowers** ⭐ | Planning, brainstorming, TDD, systematic debugging skills | Power users |
+| **context7** ⭐ | MCP-backed library/framework docs fetcher | Developers |
+| **playwright** ⭐ | Browser automation and web testing | Anyone testing web apps |
+| **claude-code-setup** ⭐ | Analyze a codebase and recommend automations | New projects |
 | **stripe** | Stripe payment integration helpers | Finance / billing teams |
 | **frontend-design** | Production-quality UI/web design | Designers and frontend devs |
+
+⭐ = enabled by default in this starter kit.
 
 ### 4. Knowledge Work (`knowledge-work-plugins`)
 
@@ -103,17 +113,28 @@ The MCP server is already pre-wired in `.mcp.json` (no manual install needed) �
 installing the plugin additionally loads the 8 skills. On first MCP call, a
 browser window opens for OAuth. Or run `elnora auth login` any time to pre-auth.
 
+### 6. Community Workflows (`claude-code-workflows`)
+
+**Source**: github.com/wshobson/agents
+**Trust level**: Medium — community-maintained, not Anthropic-verified
+**Status**: Configured. 5 plugins enabled by default.
+
+| Plugin | What it gives you | Best for |
+|--------|-------------------|----------|
+| **security-compliance** ⭐ | Security compliance auditing | Regulated environments |
+| **security-scanning** ⭐ | SAST, threat modeling, security hardening | Everyone |
+| **code-documentation** ⭐ | Technical documentation and tutorial generation | Developers |
+| **business-analytics** ⭐ | KPI dashboards and data storytelling | Ops / analytics |
+| **hr-legal-compliance** ⭐ | HR, legal docs, and GDPR compliance | HR / legal |
+
+⭐ = enabled by default. The marketplace has 15+ plugins total; browse the rest via `/plugins`.
+
 ---
 
 ## Other Marketplaces (add later)
 
 These are community-maintained. Quality is generally good but not Anthropic-verified.
 You can add them via `/plugins` > "Add marketplace" when you're ready.
-
-### Community Workflows (`claude-code-workflows`)
-
-**Source**: github.com/wshobson/agents
-**What's in it**: 15+ plugins covering backend development, Python, databases, security, testing, observability, and more. Best for development teams.
 
 ### Superpowers — alternate source (`superpowers-marketplace`)
 
