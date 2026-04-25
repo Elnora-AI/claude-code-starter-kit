@@ -1,6 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_NO_FLICKER": "1"
   },
   "permissions": {
     "allow": [
@@ -43,21 +44,10 @@
   },
   "hooks": {},
   "enabledPlugins": {
-    "feature-dev@claude-code-plugins": true,
+    "elnora@elnora-plugins": true,
     "commit-commands@claude-code-plugins": true,
-    "plugin-dev@claude-code-plugins": true,
-    "security-guidance@claude-code-plugins": true,
-    "security-compliance@claude-code-workflows": true,
-    "security-scanning@claude-code-workflows": true,
-    "code-documentation@claude-code-workflows": true,
-    "business-analytics@claude-code-workflows": true,
-    "hr-legal-compliance@claude-code-workflows": true,
-    "claude-md-management@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true,
-    "superpowers@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
-    "playwright@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "claude-md-management@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-code-plugins": {

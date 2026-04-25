@@ -1,27 +1,27 @@
 #!/bin/bash
 # ============================================================
-# Claude Code Starter Kit — One-liner Installer (macOS)
+# Elnora Starter Kit — One-liner Installer (macOS)
 # ============================================================
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
 #
 # Downloads the starter kit tarball (no git required), extracts it to
-# ~/Documents/claude-code-starter-kit, and runs setup-mac.sh.
+# ~/Documents/elnora-starter-kit, and runs setup-mac.sh.
 # ============================================================
 
 set -euo pipefail
 
 REPO_OWNER="Elnora-AI"
-REPO_NAME="claude-code-starter-kit"
+REPO_NAME="elnora-starter-kit"
 BRANCH="main"
-TARGET_DIR="$HOME/Documents/claude-code-starter-kit"
+TARGET_DIR="$HOME/Documents/elnora-starter-kit"
 
 echo "==========================================="
-echo "  Claude Code Starter Kit — Bootstrap"
+echo "  Elnora Starter Kit — Bootstrap"
 echo "==========================================="
 echo ""
 echo "This will:"
-echo "  1. Download the starter kit to ~/Documents/claude-code-starter-kit"
+echo "  1. Download the starter kit to ~/Documents/elnora-starter-kit"
 echo "  2. Run setup-mac.sh (installs Claude Code + dev tools)"
 echo ""
 

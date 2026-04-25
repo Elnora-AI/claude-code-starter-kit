@@ -4,6 +4,11 @@ This file gives Claude Code the context it needs to help with this project.
 Claude reads it automatically at the start of every conversation — keep it
 tight and useful. Update it as the project evolves.
 
+> **For agents handing off from the install script**: see
+> [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md) for the Phase 2 setup
+> sequence (verify versions, collect Elnora API key, smoke test, knowledge
+> base). If something looks half-done, see [`RECOVERY.md`](RECOVERY.md).
+
 ---
 
 ## Core Rules
