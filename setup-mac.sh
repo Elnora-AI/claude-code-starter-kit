@@ -329,7 +329,7 @@ persist_brew_path() {
     if ! grep -Fq "$brew_eval" "$shell_profile" 2>/dev/null; then
         {
             echo ""
-            echo "# Added by Claude Code starter kit setup-mac.sh"
+            echo "# Added by Elnora Starter Kit setup-mac.sh"
             echo "$brew_eval"
         } >> "$shell_profile"
         echo "  Added Homebrew PATH to $shell_profile (takes effect in new terminals)."
@@ -634,24 +634,31 @@ echo "  If you ran this in Terminal.app, just open a new window."
 echo "-------------------------------------------"
 echo ""
 
-echo "Next steps (interactive — these need your browser/input):"
-echo "  1. Authenticate Claude Code:     claude             (log in, then /exit)"
-echo "  2. Authenticate Elnora AI:       elnora auth login  (opens browser for OAuth)"
-echo "  3. Authenticate GitHub CLI:      gh auth login      (GitHub.com → HTTPS → browser)"
-echo "  4. Create your first project repo:"
-echo "       cd ~/Documents/Projects"
-echo "       gh repo create my-project --private --add-readme --clone"
-echo "       cd my-project && code ."
-echo "  5. In VS Code terminal:  claude   then   /install-github-app"
-echo "  6. Copy starter kit into your repo:"
-echo "       git clone https://github.com/Elnora-AI/claude-code-starter-kit.git temp-starter"
-echo "       rsync -a --exclude '.git' temp-starter/ ."
-echo "       rm -rf temp-starter"
-echo "  7. (Optional) Create an Obsidian vault in your iCloud, Google Drive,"
-echo "     OneDrive, or Dropbox folder (or plain local). The starter kit's"
-echo "     Claude will ask for your vault path on first knowledge-base use —"
-echo "     it auto-detects Obsidian vaults in common sync folders, so just"
-echo "     have one ready and Claude will find it."
+echo "==========================================="
+echo "  Phase 1 complete — handing off to Claude"
+echo "==========================================="
+echo ""
+
+if command -v claude >/dev/null 2>&1; then
+    echo "Starting Claude — it will read INSTALL_FOR_AGENTS.md and finish setup."
+    echo "On first run, your browser will open to log into your Claude Pro/Max account."
+    echo ""
+    # exec replaces this shell — Claude takes over with the initial prompt loaded.
+    # If exec fails (no TTY, broken install), the lines below print as a fallback.
+    exec claude "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at ~/claude-starter-install.log."
+fi
+
+# Fallback: claude not on PATH (install of Claude Code itself failed) — show
+# the manual continuation path so the user can recover after fixing the issue.
+echo "  ⚠  'claude' command not found — Claude Code install may have failed."
+echo ""
+echo "  See the remediation hints above. Once you've fixed it, re-run:"
+echo "      ./setup-mac.sh"
+echo ""
+echo "  Or continue manually:"
+echo "      cd $(pwd)"
+echo "      claude"
+echo "      Then say: 'Read INSTALL_FOR_AGENTS.md and finish setup.'"
 echo ""
 
 # Exit 0 even if some steps failed — the remediation recap tells the user exactly

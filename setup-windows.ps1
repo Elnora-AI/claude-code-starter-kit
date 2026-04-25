@@ -788,28 +788,38 @@ if ($FailedSteps.Count -gt 0) {
     Write-Host ""
 }
 
-Write-Host "Next steps (interactive — these need your browser/input):" -ForegroundColor White
-Write-Host "  1. Authenticate Claude Code:  claude             (log in, then /exit)"
-Write-Host "  2. Authenticate Elnora AI:    elnora auth login  (opens browser for OAuth)"
-Write-Host "  3. Authenticate GitHub CLI:   gh auth login      (GitHub.com -> HTTPS -> browser)"
-Write-Host "  4. Create your first project repo:"
-Write-Host "       cd `$env:USERPROFILE\Documents\Projects"
-Write-Host "       gh repo create my-project --private --add-readme --clone"
-Write-Host "       cd my-project; code ."
-Write-Host "  5. In VS Code terminal:  claude   then   /install-github-app"
-Write-Host "  6. Copy starter kit into your repo:"
-Write-Host "       git clone https://github.com/Elnora-AI/claude-code-starter-kit.git temp-starter"
-Write-Host "       robocopy temp-starter . /E /XD .git"
-Write-Host "       Remove-Item temp-starter -Recurse -Force"
-Write-Host "  7. (Optional) Create an Obsidian vault in OneDrive, Google Drive,"
-Write-Host "     or Dropbox (or plain local). The starter kit's Claude will ask"
-Write-Host "     for your vault path on first knowledge-base use — it auto-detects"
-Write-Host "     Obsidian vaults in common sync folders, so just have one ready"
-Write-Host "     and Claude will find it."
+Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host "  Phase 1 complete - handing off to Claude" -ForegroundColor Cyan
+Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Close the transcript so the log file is flushed and released.
+# Close the transcript before handing off, so the log file is flushed and
+# Claude can read it as part of Phase 2.
 try { Stop-Transcript | Out-Null } catch { }
+
+$claudeAvailable = Get-Command claude -ErrorAction SilentlyContinue
+if ($claudeAvailable) {
+    Write-Host "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup." -ForegroundColor White
+    Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
+    Write-Host ""
+    # PowerShell has no `exec` — call claude as a child process and let it own
+    # the terminal until it exits. Then the script exits cleanly.
+    & claude "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at $env:USERPROFILE\claude-starter-install.log."
+    exit 0
+}
+
+# Fallback: claude not on PATH (install of Claude Code itself failed) — show
+# the manual continuation path so the user can recover after fixing the issue.
+Write-Host "  ! 'claude' command not found - Claude Code install may have failed." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  See the remediation hints above. Once you've fixed it, re-run:" -ForegroundColor White
+Write-Host "      .\setup-windows.ps1"
+Write-Host ""
+Write-Host "  Or continue manually:" -ForegroundColor White
+Write-Host "      cd $(Get-Location)"
+Write-Host "      claude"
+Write-Host "      Then say: 'Read INSTALL_FOR_AGENTS.md and finish setup.'"
+Write-Host ""
 
 # Exit 0 even if some steps failed — the remediation recap above tells the user
 # exactly what to do, and a non-zero exit would trip callers (e.g. IDE terminals

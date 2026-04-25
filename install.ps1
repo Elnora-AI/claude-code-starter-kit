@@ -1,23 +1,23 @@
 # ============================================================
-# Claude Code Starter Kit — One-liner Installer (Windows)
+# Elnora Starter Kit — One-liner Installer (Windows)
 # ============================================================
 # Usage (PowerShell):
-#   irm https://raw.githubusercontent.com/Elnora-AI/claude-code-starter-kit/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
 #
 # Downloads the starter kit zip (no git required), extracts it to
-# %USERPROFILE%\Documents\claude-code-starter-kit, and runs setup-windows.ps1.
+# %USERPROFILE%\Documents\elnora-starter-kit, and runs setup-windows.ps1.
 # ============================================================
 
 $ErrorActionPreference = "Stop"
 
 $RepoOwner = "Elnora-AI"
-$RepoName  = "claude-code-starter-kit"
+$RepoName  = "elnora-starter-kit"
 $Branch    = "main"
 $TargetDir = Join-Path $env:USERPROFILE "Documents\$RepoName"
 
 Write-Host ""
 Write-Host "===========================================" -ForegroundColor Cyan
-Write-Host "  Claude Code Starter Kit - Bootstrap" -ForegroundColor Cyan
+Write-Host "  Elnora Starter Kit - Bootstrap" -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "This will:"
