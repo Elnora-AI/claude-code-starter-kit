@@ -99,20 +99,32 @@ This should return the user's email. If it errors with 401/403, the key is
 wrong — go back to step 4. If it errors with a network message, see
 `RECOVERY.md` → "Network blocked".
 
-### 6. Sever the seed-repo upstream
+### 6. Make this a git repo (seed-repo step)
 
-The kit was cloned from `Elnora-AI/elnora-starter-kit`. From now on, this is
-the **user's own repo**. Rename the upstream so they can still fetch updates
-later but won't accidentally push back to ours:
+The kit reaches the user's machine as files extracted from a tarball — there
+is no `.git/` directory by default (the bootstrap can't `git clone` because
+git isn't always installed yet at that point). Initialize a fresh repo here
+and wire in our upstream so the user can `git fetch elnora-upstream` for
+future updates, while `origin` stays free for their own remote.
+
+If `.git/` already exists (rare — the user manually `git clone`'d the kit
+instead of using the one-liner), just rename the existing origin instead.
 
 ```
-git remote rename origin elnora-upstream
+if [ -d .git ]; then
+    git remote rename origin elnora-upstream
+else
+    git init -q
+    git symbolic-ref HEAD refs/heads/main
+    git remote add elnora-upstream https://github.com/Elnora-AI/elnora-starter-kit.git
+fi
 git remote -v   # should show "elnora-upstream" (fetch + push), no "origin"
 ```
 
-Tell the user: "This is now your own repo. I renamed our upstream so you can
-still pull updates from us with `git fetch elnora-upstream`, but `origin` is
-free for you to point at your own GitHub repo whenever you create one."
+Tell the user: "This is now your own git repo. Our upstream is preserved as
+`elnora-upstream` so you can `git fetch elnora-upstream` for future updates.
+`origin` is free for you to point at your own GitHub repo whenever you create
+one."
 
 Optionally offer: "Want me to create a private GitHub repo for this and push
 it? Run `gh repo create <name> --private --source=. --push`."
