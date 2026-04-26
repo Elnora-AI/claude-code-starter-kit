@@ -86,6 +86,15 @@ if (Test-Path $TargetDir) {
 }
 
 Set-Location $TargetDir
+
+# Strip dev/CI scaffolding the customer can't use anyway. tests/handoff/ exists
+# for our CI assertions; .github/ holds workflows + dependabot config that only
+# fire on the official Elnora-AI/elnora-starter-kit repo. Both ride along in the
+# zip and would just clutter the customer's directory. -ErrorAction
+# SilentlyContinue keeps this idempotent on re-runs after the dirs are gone.
+Remove-Item -Path (Join-Path $TargetDir "tests")   -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path (Join-Path $TargetDir ".github") -Recurse -Force -ErrorAction SilentlyContinue
+
 # Bypass execution policy for this process only so setup-windows.ps1 runs
 # without requiring the user to set it manually (as the older flow did).
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force

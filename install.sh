@@ -47,6 +47,14 @@ else
 fi
 
 cd "$TARGET_DIR"
+
+# Strip dev/CI scaffolding the customer can't use anyway. tests/handoff/ exists
+# for our CI assertions; .github/ holds workflows + dependabot config that only
+# fire on the official Elnora-AI/elnora-starter-kit repo. Both ride along in the
+# tarball and would just clutter the customer's directory. rm -rf is idempotent
+# so this is safe on both fresh and re-run installs.
+rm -rf "$TARGET_DIR/tests" "$TARGET_DIR/.github"
+
 chmod +x setup-mac.sh
 echo ""
 
