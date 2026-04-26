@@ -455,7 +455,11 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 # and updates User PATH. No winget/Node required. "AI surfaces first,
 # toolchain second" mirrors the macOS script.
 if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
-    Write-Host "[2/9] Installing Elnora CLI..." -ForegroundColor Green
+    # Pin the Elnora CLI version to bypass the installer's GitHub API call —
+    # see matching comment in setup-mac.sh step 2 for the rate-limit rationale.
+    # Bump this when a newer release should be the workshop default.
+    $elnoraCliVersion = "v1.5.0"
+    Write-Host "[2/9] Installing Elnora CLI ($elnoraCliVersion)..." -ForegroundColor Green
     Write-Host "  Using Elnora's native installer (no prerequisites required)." -ForegroundColor Gray
     # Sub-process isolation: see matching comment in the Claude Code block above.
     # The Elnora installer has 8 `exit 1` paths (GitHub API failure, 404 on
@@ -464,7 +468,11 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     # setup-windows.ps1 mid-run.
     # Leading SecurityProtocol assignment forces TLS 1.2 on PS 5.1 — see the
     # Claude Code block above for the full reasoning.
-    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; irm https://cli.elnora.ai/install.ps1 | iex" }
+    # The scriptblock-create dance is needed to pass -Version to the installer.
+    # iex evaluates a string in caller scope and ignores trailing -Version
+    # because iex itself has no such param; converting to a scriptblock first
+    # honors the installer's `param([string]$Version)` declaration.
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://cli.elnora.ai/install.ps1').Content)) -Version '$elnoraCliVersion'" }
     Update-SessionPath
 
     # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
@@ -659,8 +667,11 @@ $obsidianPaths = @(
     "${env:ProgramFiles(x86)}\Obsidian\Obsidian.exe"
 )
 $obsidianInstalled = [bool]($obsidianPaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
-if (-not $obsidianInstalled) {
-    # Fall back to winget — catches installs in non-standard locations.
+if (-not $obsidianInstalled -and $hasWinget) {
+    # Fall back to winget — catches installs in non-standard locations. Gated
+    # on $hasWinget so that on machines without winget (some Win10 builds, the
+    # GitHub Actions windows-2022 runner), this doesn't surface a raw "term not
+    # recognized" error to stderr and confuse the user.
     $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
     if ($wingetHas) { $obsidianInstalled = $true }
 }
