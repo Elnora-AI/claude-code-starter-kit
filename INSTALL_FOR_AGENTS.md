@@ -468,6 +468,32 @@ recognizable check output, e.g. the binary crashed), treat that as an
 auth/connectivity failure and block — see `RECOVERY.md` → "Elnora auth
 fails".
 
+#### 7a. Elnora MCP — one-time browser OAuth
+
+The repo's `.mcp.json` registers the Elnora MCP server at
+`https://mcp.elnora.ai/mcp`. The server uses OAuth 2.1 (PKCE), so the
+**first** time Claude Code tries to use the `mcp__elnora__*` tools it
+will mark the server as `needs-auth` and prompt the user to authorize
+in a browser. This is normal — not a bug. Once the user clicks
+through, Claude Code stores the access + refresh tokens and the MCP
+reconnects automatically on every future session.
+
+Tell the user (paraphrase, do not read verbatim):
+
+> "The Elnora MCP server needs a one-time browser sign-in to connect.
+> Run `/mcp` in this Claude Code window, pick `elnora`, follow the
+> browser prompt to log in, and you're done — Claude will remember it
+> from now on."
+
+If the user is in headless mode (`ELNORA_SKIP_HANDOFF=1` or
+`ELNORA_HANDOFF_MODE=headless`), skip this step — there is no
+interactive browser. The skills still work via the `elnora` CLI
+shell-out path, which authenticates from `~/.elnora/profiles.toml`.
+
+This step is **non-blocking**. Do not delay `HANDOFF_COMPLETE` waiting
+for the user to finish the OAuth dance — they can do it whenever they
+first invoke an MCP tool.
+
 ### 8. Knowledge base setup (Obsidian) — optional but recommended
 
 Ask the user: **"Do you already have an Obsidian vault, or want to set one up

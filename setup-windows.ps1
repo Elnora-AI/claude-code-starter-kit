@@ -1279,6 +1279,49 @@ if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless"
         }
     }
     Write-Host ""
+
+    # ---- Wire Elnora plugin into ~/.claude (idempotent JSON merge) ----
+    # `elnora setup claude` registers the elnora-plugins marketplace in
+    # ~/.claude/plugins/known_marketplaces.json and sets
+    # enabledPlugins["elnora@elnora-plugins"]=true in ~/.claude/settings.json.
+    # The starter kit's project-scope .claude/settings.json already enables
+    # the plugin for THIS directory, so this step only matters for using
+    # Elnora skills OUTSIDE this repo. It also clears the `elnora doctor`
+    # "Plugin enabled - settings.json not found" warning, which only reads
+    # user-scope settings.
+    #
+    # NOTE: this does NOT touch MCP. The Elnora MCP server's auth flow is
+    # unrelated and depends on upstream Claude Code header bugs.
+    Write-Host "[Plugin] Wiring Elnora plugin into Claude Code config"
+    $elnoraOnPath = [bool](Get-Command elnora -ErrorAction SilentlyContinue)
+    $claudeUserDir = Join-Path $env:USERPROFILE ".claude"
+    if (-not $elnoraOnPath) {
+        Write-Host "      [SKIP] 'elnora' command not on PATH yet." -ForegroundColor Gray
+        Write-Host "             Open a new PowerShell window and run" -ForegroundColor Gray
+        Write-Host "             'elnora setup claude' once Claude Code has" -ForegroundColor Gray
+        Write-Host "             been launched at least once." -ForegroundColor Gray
+    } elseif (Test-Path $claudeUserDir) {
+        $setupOutput = elnora setup claude 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "      [OK] Plugin enabled user-globally." -ForegroundColor Green
+        } else {
+            Write-Host "      [WARN] 'elnora setup claude' returned non-zero. Output:" -ForegroundColor Yellow
+            $setupOutput | ForEach-Object { Write-Host "             $_" -ForegroundColor Gray }
+            Write-Host "             Non-fatal -- the plugin still works for THIS" -ForegroundColor Gray
+            Write-Host "             project via .claude\settings.json in this repo." -ForegroundColor Gray
+        }
+    } else {
+        Write-Host "      [SKIP] $claudeUserDir does not exist yet." -ForegroundColor Gray
+        Write-Host "             This is normal if you haven't launched Claude Code" -ForegroundColor Gray
+        Write-Host "             yet in this terminal session. The Elnora plugin is" -ForegroundColor Gray
+        Write-Host "             already enabled for THIS project via the repo's" -ForegroundColor Gray
+        Write-Host "             .claude\settings.json, so it activates the moment" -ForegroundColor Gray
+        Write-Host "             you open Claude Code in this directory." -ForegroundColor Gray
+        Write-Host "             To also enable it user-globally (for use outside" -ForegroundColor Gray
+        Write-Host "             this project), run 'elnora setup claude' after" -ForegroundColor Gray
+        Write-Host "             your first 'claude' launch." -ForegroundColor Gray
+    }
+    Write-Host ""
 }
 
 Write-Host "==========================================="
