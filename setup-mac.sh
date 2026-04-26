@@ -712,6 +712,22 @@ echo "  Phase 1 complete — handing off to Claude"
 echo "==========================================="
 echo ""
 
+# CI integration: propagate the script's accumulated PATH to $GITHUB_PATH so
+# subsequent workflow steps (handoff-e2e assertions, install-smoke-test
+# verifications, bootstrap-e2e checks) see every binary Phase 1 installed.
+# Without this, a fresh shell in the next step inherits the runner's job-
+# start PATH snapshot, which doesn't include ~/.local/bin (Claude/Elnora),
+# brew prefix, or anything brew added after job start. No-op outside GH
+# Actions (variable unset).
+if [ -n "${GITHUB_PATH:-}" ]; then
+    IFS=':' read -r -a _path_dirs <<< "$PATH"
+    for _dir in "${_path_dirs[@]}"; do
+        [ -n "$_dir" ] && echo "$_dir" >> "$GITHUB_PATH"
+    done
+    unset _path_dirs _dir
+    echo "  (CI: propagated PATH to \$GITHUB_PATH for downstream steps)"
+fi
+
 # The exact prompt handed to Claude. Defined once so the headless test mode
 # below uses byte-for-byte the same string as the production handoff —
 # divergence here is the bug headless mode is supposed to catch.
