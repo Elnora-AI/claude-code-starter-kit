@@ -13,20 +13,32 @@ terminal before.
 
 ## Install
 
-**macOS** — open Terminal and run:
+**macOS** — open Terminal (press `Cmd+Space`, type `Terminal`, hit Enter)
+and paste this:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
 ```
 
-**Windows** — open PowerShell and run:
+**Windows** — open PowerShell (press the Start key, type `PowerShell`, hit
+Enter) and paste this:
 
 ```powershell
 irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
 ```
 
+What to expect while it runs:
+
+- The window will print a lot of output — that's normal. Don't close it.
+- macOS will ask for your **Mac login password** when Homebrew installs.
+  Characters won't appear as you type — that's normal too.
+- A **browser window** will pop open at the end so you can log into Claude
+  Pro/Max. Sign in, then come back to the terminal.
+- Claude will then take over and ask you to paste your **Elnora API key**.
+
 Total runtime: 15–25 minutes on a fresh machine (Xcode CLT can take 5–10
-minutes on its own, plus first-run Homebrew/Node/etc.).
+minutes on its own, plus first-run Homebrew/Node/etc.). Re-runs on a partly
+set up machine are much faster — already-installed tools are skipped.
 
 These bootstrap commands and the setup scripts they invoke download installers
 over HTTPS and execute them without separate checksum verification. Running
