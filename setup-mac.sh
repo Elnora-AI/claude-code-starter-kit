@@ -432,11 +432,28 @@ if command -v node &> /dev/null; then
 fi
 if ! $node_major_ok; then
     echo "[4/10] Installing Node.js 22 LTS..."
-    if run_step "Node.js" brew install node@22; then
+    # Suppress the ~200-line brew caveats dump (the "node@22 was installed but
+    # not linked because node@20 is already linked" warning + a wall of
+    # "==> Caveats" sections from node@22's dependency chain). The next line
+    # always runs `brew link --force --overwrite node@22`, which resolves the
+    # "not linked" condition - so the caveats are obsolete by the time the
+    # user reads them, and they read like a scary failure to a beginner.
+    # Capture brew's output to a tempfile and only echo it on failure;
+    # on success print a one-line confirmation. Keeps the success path
+    # quiet while preserving full diagnostic output when something breaks.
+    node_install_log="$(mktemp 2>/dev/null)" || node_install_log="/tmp/claude-setup-node.$$"
+    if run_step "Node.js" /bin/bash -c "brew install node@22 >\"$node_install_log\" 2>&1"; then
         brew link --force --overwrite node@22 &>/dev/null || true
         hash -r 2>/dev/null || true
         echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed - restart terminal')"
+    else
+        # On failure, surface the captured output so the FAILURE box has
+        # something to point at.
+        if [ -s "$node_install_log" ]; then
+            sed 's/^/    /' "$node_install_log" >&2
+        fi
     fi
+    rm -f "$node_install_log"
 else
     echo "[4/10] Node.js already installed: $(node --version). Skipping."
 fi
@@ -699,12 +716,33 @@ if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
     echo ""
 fi
 
-echo "-------------------------------------------"
-echo "  IMPORTANT - to see the new PATH in VS Code:"
-echo "  Quit VS Code FULLY (Cmd+Q - not just closing the terminal)"
-echo "  and reopen it. VS Code caches its PATH at app launch time."
-echo "  If you ran this in Terminal.app, just open a new window."
-echo "-------------------------------------------"
+# VS Code reminder banner. Bright yellow box with blank lines above and
+# below so the "quit fully" rule reads as a separate section, not as
+# another summary row. Real workshop attendees have walked past this in
+# plain-text form and wondered why their newly-installed `claude` / `elnora`
+# commands weren't visible in the VS Code integrated terminal - the answer
+# is always that VS Code cached its PATH at launch time. Color is gated on
+# `-t 1` (TTY) so log files stay clean.
+if [ -t 1 ]; then
+    YELLOW=$'\033[1;33m'
+    Y_NC=$'\033[0m'
+else
+    YELLOW=""
+    Y_NC=""
+fi
+echo ""
+printf "%s  +============================================================+%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |                                                            |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |   IMPORTANT - to see the new PATH in VS Code:              |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |                                                            |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |   Quit VS Code FULLY (Cmd+Q - not just closing the         |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |   terminal) and reopen it. VS Code caches its PATH at      |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |   app launch time.                                         |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |                                                            |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |   If you ran this in Terminal.app, just open a new window. |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  |                                                            |%s\n" "$YELLOW" "$Y_NC"
+printf "%s  +============================================================+%s\n" "$YELLOW" "$Y_NC"
+echo ""
 echo ""
 
 echo "==========================================="
