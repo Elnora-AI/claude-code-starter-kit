@@ -1218,6 +1218,36 @@ if ($env:GITHUB_PATH) {
 # Claude can read it as part of Phase 2.
 try { Stop-Transcript | Out-Null } catch { }
 
+# Post-process the install log to strip Elnora installer noise.
+#
+# Background: the live terminal already filters this via Invoke-Step's
+# -SuppressPattern. But Start-Transcript hooks the host independently and
+# captures the unfiltered subprocess output, so the file users see (and mail
+# to support) still contains the noise. We rewrite the file once, after
+# Stop-Transcript has flushed it, with the same patterns the live filter
+# uses. Keeps the on-disk log readable without changing what live users saw.
+#
+# Scoped to ELNORA_SKIP_HANDOFF=1 / headless test mode for the same reason
+# the live filter is — interactive users should still see all output, since
+# any "noise" in their flow may indicate a real problem.
+if (($env:ELNORA_SKIP_HANDOFF -eq "1") -or ($env:ELNORA_HANDOFF_MODE -eq "headless")) {
+    if (Test-Path $LogFile) {
+        try {
+            $raw = Get-Content $LogFile -Raw -ErrorAction Stop
+            $cleaned = [regex]::Replace($raw, '(?m)^.*("error":\s*"API key is required|"code":\s*"VALIDATION_ERROR"|"suggestion":\s*"Get your API key|System\.Management\.Automation\.RemoteException).*\r?\n', '')
+            # Also drop solitary `{` / `}` lines that are the JSON-block
+            # leftovers once the keyed lines above are gone. Match only
+            # lines that are pure whitespace + a single brace.
+            $cleaned = [regex]::Replace($cleaned, '(?m)^\s*[\{\}]\s*\r?\n', '')
+            if ($cleaned -ne $raw) {
+                Set-Content -Path $LogFile -Value $cleaned -NoNewline
+            }
+        } catch {
+            # Best-effort cleanup; never fail the script over a log polish.
+        }
+    }
+}
+
 # The exact prompt handed to Claude. Defined once so the headless test mode
 # below uses byte-for-byte the same string as the production handoff -
 # divergence here is the bug headless mode is supposed to catch.
