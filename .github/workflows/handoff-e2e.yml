@@ -13,7 +13,7 @@ name: handoff-e2e
 #                         spike the bill.
 #   ELNORA_API_KEY_TEST - elnora_live_* key. Recommend a dedicated test
 #                         account, not your personal one — every run will
-#                         hit `elnora auth whoami` and `elnora protocol list`.
+#                         hit `elnora whoami` and `elnora doctor`.
 #
 # Set both at:
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository secret

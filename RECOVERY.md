@@ -61,25 +61,26 @@ corporate firewall, a Wi-Fi captive portal, or VPN. Try in this order:
 
 ---
 
-## 4. "Elnora auth fails / `elnora auth whoami` returns an error"
+## 4. "Elnora auth fails / `elnora whoami` returns an error"
 
-**Symptom:** `elnora auth whoami` returns `401 Unauthorized` or `403 Forbidden`,
-or Claude wrote the key to `.env` but `elnora` still doesn't work.
+**Symptom:** `elnora whoami` or `elnora doctor` returns `401 Unauthorized` or
+`403 Forbidden`, or `elnora auth status` says you're not authenticated.
 
-**Fix:** check the key.
+**Fix:** re-authenticate with a fresh key.
 
 ```
-grep '^ELNORA_API_KEY=' .env
+elnora auth status
 ```
 
-The value should start with `elnora_live_`. If it doesn't, or if there's
-trailing whitespace/quotes, you copied something wrong. Generate a new key:
+If it reports "not authenticated" (or the wrong account), generate a new key
+and log in again:
 
 1. Visit `https://platform.elnora.ai/settings` → **API Keys** tab.
 2. Click **Create key**, name it after your machine.
-3. Copy the new key.
-4. Update `.env`: `ELNORA_API_KEY=elnora_live_<new-key>` (one line, no quotes).
-5. Run `elnora auth whoami` again.
+3. Copy the new key (it starts with `elnora_live_`).
+4. Run `elnora auth login --api-key <paste-new-key>` — this saves the key to
+   `~/.elnora/profiles.toml` so every shell picks it up.
+5. Run `elnora whoami` again.
 
 If it still fails with a real key, the network may be blocking
 `https://platform.elnora.ai` — see #3.

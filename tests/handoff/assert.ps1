@@ -113,10 +113,12 @@ if (Test-Path $Transcript) {
     } else {
         Assert-Fail "transcript does not contain HANDOFF_COMPLETE marker"
     }
-    if ($transcriptText -match 'elnora\s+(auth\s+whoami|protocol|--version)') {
-        Assert-Ok "transcript shows Claude invoked the elnora CLI"
+    # Match the auth/verification commands from INSTALL_FOR_AGENTS.md (steps 4-7).
+    # `elnora --version` alone is not enough — it doesn't prove auth works.
+    if ($transcriptText -match 'elnora\s+(whoami|doctor|auth\s+(login|status))') {
+        Assert-Ok "transcript shows Claude invoked an elnora auth/verification command"
     } else {
-        Assert-Fail "transcript shows no elnora CLI invocation"
+        Assert-Fail "transcript shows no elnora auth/verification command (whoami|doctor|auth login|auth status)"
     }
 } else {
     Assert-Fail "transcript file not found at $Transcript"

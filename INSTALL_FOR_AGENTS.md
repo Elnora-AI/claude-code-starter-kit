@@ -46,8 +46,8 @@ mode, follow these adjustments:
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
   4. `CLAUDE.md` no longer contains the `### First-run setup` heading or
      its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
-  5. `elnora whoami` and `elnora doctor` (or `elnora protocols list`)
-     completed without authentication errors.
+  5. `elnora whoami` and `elnora doctor` completed without
+     authentication errors.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
   this until the five-item checklist above is satisfied.
@@ -171,11 +171,11 @@ it? Run `gh repo create <name> --private --source=. --push`."
 ### 7. Smoke test — confirm Elnora API is reachable
 
 ```
-elnora protocol list | head -3
+elnora doctor
 ```
 
-Should return at least a header line and one or two protocol entries. If it
-returns nothing or errors, see `RECOVERY.md` → "Elnora auth fails".
+Should report green checks for config, auth, and API connectivity. If it
+errors, see `RECOVERY.md` → "Elnora auth fails".
 
 ### 8. Knowledge base setup (Obsidian) — optional but recommended
 

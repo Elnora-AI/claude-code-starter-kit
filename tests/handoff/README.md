@@ -34,7 +34,7 @@ You need two API keys. Paste them into GitHub repo secrets:
 | Secret name | Where to get it | Notes |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys | Set a low monthly budget cap on the key in the Anthropic console so a runaway test can't spike the bill (~$1-3 per run on Sonnet). |
-| `ELNORA_API_KEY_TEST` | https://platform.elnora.ai/settings → API Keys | Use a **dedicated test account**, not your personal one. Every run hits `elnora auth whoami` and `elnora protocol list`. |
+| `ELNORA_API_KEY_TEST` | https://platform.elnora.ai/settings → API Keys | Use a **dedicated test account**, not your personal one. Every run hits `elnora whoami` and `elnora doctor`. |
 
 **For local testing** (running the headless mode on your own Mac), paste
 the same values into `.env` at the repo root — that file is gitignored.

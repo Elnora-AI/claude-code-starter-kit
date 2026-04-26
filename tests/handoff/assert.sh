@@ -106,11 +106,15 @@ if [ -f "$TRANSCRIPT" ]; then
     else
         fail "transcript does not contain HANDOFF_COMPLETE marker"
     fi
-    # Sanity check: did Claude actually call the elnora CLI?
-    if grep -q '"elnora' "$TRANSCRIPT" || grep -q 'elnora auth whoami' "$TRANSCRIPT"; then
-        ok "transcript shows Claude invoked the elnora CLI"
+    # Sanity check: did Claude actually authenticate + verify the Elnora CLI?
+    # Match the auth/verification commands from INSTALL_FOR_AGENTS.md (steps 4-7).
+    # We grep for any of: `elnora whoami`, `elnora doctor`, or `elnora auth login`
+    # so the test fails if Claude only ran `elnora --version` and skipped the
+    # actual auth check.
+    if grep -qE 'elnora (whoami|doctor|auth (login|status))' "$TRANSCRIPT"; then
+        ok "transcript shows Claude invoked an elnora auth/verification command"
     else
-        fail "transcript shows no elnora CLI invocation"
+        fail "transcript shows no elnora auth/verification command (whoami|doctor|auth login|auth status)"
     fi
 else
     fail "transcript file not found at $TRANSCRIPT"
