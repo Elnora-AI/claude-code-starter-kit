@@ -105,9 +105,8 @@ Write-Host "  Done." -ForegroundColor Gray
 # verifies this hash before handing off to claude with bypassPermissions —
 # if a third party tampers with the doc between extract and setup, the
 # verify step trips and the handoff aborts. This is the trust anchor for
-# the headless Phase 2 flow. PR2 (marker-based dir gate) extends the
-# schema; this PR introduces the file. Only written on FRESH extract
-# (re-bless on every run would defeat the verify).
+# the headless Phase 2 flow. Only written on FRESH extract (re-bless on
+# every run would defeat the verify).
 $markerPath = Join-Path $TargetDir ".elnora-starter-kit-marker"
 $installForAgentsPath = Join-Path $TargetDir "INSTALL_FOR_AGENTS.md"
 if ($FreshExtract -and (Test-Path -LiteralPath $installForAgentsPath)) {

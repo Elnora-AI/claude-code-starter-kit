@@ -68,13 +68,14 @@ cd "$TARGET_DIR"
 # verifies this hash before handing off to claude with bypassPermissions —
 # if a third party tampers with the doc between extract and setup, the
 # verify step trips and the handoff aborts. This is the trust anchor for
-# the headless Phase 2 flow. PR2 (marker-based dir gate) extends the
-# schema; this PR introduces the file.
+# the headless Phase 2 flow.
 #
 # We only write on FRESH extract. If we wrote on every run, a tampered
 # doc would just get re-blessed on the next install.sh invocation, which
 # defeats the point. setup-mac.sh handles the legacy "no marker" case
-# (existing users from before this PR) with a one-time auto-migrate.
+# (pre-existing installs from before integrity markers shipped) with a
+# soft warning for the interactive handoff and a hard refusal for headless
+# bypassPermissions runs.
 if [ "$FRESH_EXTRACT" = "1" ] && [ -f "$TARGET_DIR/INSTALL_FOR_AGENTS.md" ]; then
     install_for_agents_sha=$(shasum -a 256 "$TARGET_DIR/INSTALL_FOR_AGENTS.md" | awk '{print $1}')
     cat > "$TARGET_DIR/.elnora-starter-kit-marker" <<EOF

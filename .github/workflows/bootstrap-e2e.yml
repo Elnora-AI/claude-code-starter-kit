@@ -104,6 +104,22 @@ jobs:
           # find instead of `ls | head` so shellcheck SC2012 doesn't fire.
           find "$HOME/Documents/elnora-starter-kit" -maxdepth 1 -mindepth 1 | head -20
 
+      - name: Pre-stage integrity marker (skip-tarball branch)
+        # install.sh only writes .elnora-starter-kit-marker on FRESH_EXTRACT
+        # (when it downloaded the tarball itself). The pre-populate step
+        # above triggers install.sh's "already exists" branch, so the marker
+        # never gets minted. setup-mac.sh's headless mode now hard-refuses
+        # without a marker, so we mint one here matching the rsync'd doc.
+        run: |
+          KIT="$HOME/Documents/elnora-starter-kit"
+          sha=$(shasum -a 256 "$KIT/INSTALL_FOR_AGENTS.md" | awk '{print $1}')
+          {
+            echo "version: 1"
+            echo "created: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "install_for_agents_sha256: $sha"
+          } > "$KIT/.elnora-starter-kit-marker"
+          echo "  Wrote $KIT/.elnora-starter-kit-marker (sha256=$sha)"
+
       - name: Run install.sh (full one-liner chain)
         # install.sh -> setup-mac.sh -> claude -p (headless because env is set)
         # -> Phase 2 -> HANDOFF_COMPLETE. install.sh's /dev/tty redirect now
@@ -215,6 +231,24 @@ jobs:
           $global:LASTEXITCODE = 0
           Write-Host "--- pre-populated dir ---"
           Get-ChildItem $target | Select-Object -First 20
+
+      - name: Pre-stage integrity marker (skip-zip branch)
+        # install.ps1 only writes .elnora-starter-kit-marker on FreshExtract
+        # (when it downloaded the zip itself). The pre-populate step above
+        # triggers install.ps1's "already exists" branch, so the marker
+        # never gets minted. setup-windows.ps1's headless mode now
+        # hard-refuses without a marker, so we mint one matching the
+        # robocopy'd doc.
+        shell: pwsh
+        run: |
+          $kit = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
+          $docPath = Join-Path $kit "INSTALL_FOR_AGENTS.md"
+          $hash = (Get-FileHash -Path $docPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $markerPath = Join-Path $kit ".elnora-starter-kit-marker"
+          $content = "version: 1`ncreated: $now`ninstall_for_agents_sha256: $hash`n"
+          [System.IO.File]::WriteAllText($markerPath, $content, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "  Wrote $markerPath (sha256=$hash)"
 
       - name: Run install.ps1 (full one-liner chain)
         shell: pwsh

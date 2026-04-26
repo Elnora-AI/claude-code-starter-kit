@@ -24,6 +24,12 @@ $ErrorActionPreference = "Continue"
 # Default-on logging. Start-Transcript captures all Write-Host, Write-Error,
 # AND native command output (winget, git, etc.) in PS 5.1+. Overwrites on each
 # run - re-runs are idempotent, so keeping old logs around isn't useful.
+#
+# We rely on the default %USERPROFILE% ACLs for confidentiality — files
+# created under the user's profile dir inherit "owner + SYSTEM read/write
+# only" by default, so other local users on the machine cannot read this
+# log. The Elnora API key is captured via Read-Host -AsSecureString below
+# specifically so it never enters the transcript at all.
 $LogFile = Join-Path $env:USERPROFILE "claude-starter-install.log"
 try { Start-Transcript -Path $LogFile -Force | Out-Null } catch { }
 
@@ -237,6 +243,14 @@ made Documents read-only. In that case, pick a different parent folder:
 # ------------------------------------------------------------
 # Prints a structured FAILURE box with the exit code, the command,
 # the last 10 lines of captured output, and a step-specific remediation hint.
+#
+# WARNING for future maintainers: the FAILURE box echoes -Command verbatim.
+# Today no caller passes a secret in the command string (the API key path
+# uses Read-Host -AsSecureString and stays out of $LASTEXITCODE / argv). If
+# you ever route a secret through here -- e.g. an OAuth token interpolated
+# into a scriptblock -- the failure box will leak it to the terminal and
+# Start-Transcript log. Pre-redact or wrap such commands in a helper that
+# passes a sanitized command line instead.
 function Write-StepFailure {
     param(
         [Parameter(Mandatory)][string]$Label,
@@ -523,6 +537,20 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 # api.github.com/repos/.../releases/latest. Workshop hosts on shared wifi
 # may want to set this in the environment before kicking off the install.
 if ($env:ELNORA_CLI_VERSION) {
+    # Validate before use. The value flows into a single-quoted PowerShell
+    # string that is then passed to a child `powershell.exe -Command` (see
+    # $elnoraInstallerCommand below). Without validation, a value like
+    # `v1.0';<cmd>;'` would close the quote and chain arbitrary commands.
+    # The published Elnora release tag format is `vMAJOR.MINOR[.PATCH]`
+    # (no suffixes, no whitespace), so anything outside
+    # `^v?\d+\.\d+(\.\d+)?$` is either a typo or an attack.
+    if ($env:ELNORA_CLI_VERSION -notmatch '^v?\d+\.\d+(\.\d+)?$') {
+        Write-Host "[!] ELNORA_CLI_VERSION='$($env:ELNORA_CLI_VERSION)' is not a valid release tag." -ForegroundColor Red
+        Write-Host "    Expected format: v1.2.3 (or 1.2.3, or v1.2). Refusing to use it" -ForegroundColor Red
+        Write-Host "    because it would be interpreted as PowerShell input by the installer." -ForegroundColor Red
+        Write-Host "    Unset the variable or set it to a valid Elnora release tag and re-run." -ForegroundColor Red
+        exit 1
+    }
     $elnoraCliVersion = $env:ELNORA_CLI_VERSION
     $elnoraInstallLabel = "$elnoraCliVersion (pinned via ELNORA_CLI_VERSION)"
 } else {
@@ -532,6 +560,8 @@ if ($env:ELNORA_CLI_VERSION) {
 
 # Build the installer invocation. Passing an empty -Version arg lets the
 # installer fall through to its default (latest GitHub release).
+# $elnoraCliVersion is regex-validated above (or empty), so the single-quoted
+# expansion below is safe.
 $elnoraInstallerCommand = if ($elnoraCliVersion) {
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1'))) -Version '$elnoraCliVersion'"
 } else {
@@ -728,45 +758,45 @@ if (-not (Test-RealPython)) {
         # CI smoke test on a winget-less runner - documented soft skip.
         Write-Host "[5/9] Python 3.12: ELNORA_SKIP_OPTIONAL_INSTALLS=1 and winget unavailable - skipping." -ForegroundColor Gray
     } else {
-    Write-Host "[5/9] Installing Python 3.12..." -ForegroundColor Green
-    # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
-    [void](Remove-PythonStoreAlias)
-    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
-    Update-SessionPath
-    # After install, if the Store stub is still intercepting (winget added a new
-    # one, or PATH order is wrong), remove it and refresh PATH once more.
-    if (-not (Test-RealPython)) {
-        if (Remove-PythonStoreAlias) {
-            Update-SessionPath
-        }
+        Write-Host "[5/9] Installing Python 3.12..." -ForegroundColor Green
+        # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
+        [void](Remove-PythonStoreAlias)
+        Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
+        Update-SessionPath
+        # After install, if the Store stub is still intercepting (winget added a new
+        # one, or PATH order is wrong), remove it and refresh PATH once more.
         if (-not (Test-RealPython)) {
-            # Python isn't a single binary - it depends on neighbouring DLLs -
-            # so we can't use the WindowsApps copy trick. Tell the user how to
-            # fix PATH manually, and point them at the py launcher as a fallback
-            # (py.exe lives in C:\Windows and is always on Machine PATH).
-            Write-Host ""
-            Write-Host "  +-- FAILURE: Python 3.12 (PATH/alias issue)" -ForegroundColor Red
-            Write-Host "  |   winget reported success, but 'python' still doesn't resolve" -ForegroundColor Red
-            Write-Host "  |   to real Python in this shell." -ForegroundColor Red
-            $pyCandidate = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
-            if (Test-Path $pyCandidate) {
+            if (Remove-PythonStoreAlias) {
+                Update-SessionPath
+            }
+            if (-not (Test-RealPython)) {
+                # Python isn't a single binary - it depends on neighbouring DLLs -
+                # so we can't use the WindowsApps copy trick. Tell the user how to
+                # fix PATH manually, and point them at the py launcher as a fallback
+                # (py.exe lives in C:\Windows and is always on Machine PATH).
+                Write-Host ""
+                Write-Host "  +-- FAILURE: Python 3.12 (PATH/alias issue)" -ForegroundColor Red
+                Write-Host "  |   winget reported success, but 'python' still doesn't resolve" -ForegroundColor Red
+                Write-Host "  |   to real Python in this shell." -ForegroundColor Red
+                $pyCandidate = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
+                if (Test-Path $pyCandidate) {
+                    Write-Host "  |" -ForegroundColor Red
+                    Write-Host "  |   Real Python is at:  $pyCandidate" -ForegroundColor Red
+                }
+                $pyLauncher = "C:\Windows\py.exe"
+                if (Test-Path $pyLauncher) {
+                    Write-Host "  |   Py launcher is at:  $pyLauncher  (always on PATH)" -ForegroundColor Red
+                }
                 Write-Host "  |" -ForegroundColor Red
-                Write-Host "  |   Real Python is at:  $pyCandidate" -ForegroundColor Red
+                Write-Host "  |   What to do:" -ForegroundColor Yellow
+                foreach ($line in ((Get-RemediationHint -Label "Python 3.12") -split "`r?`n")) {
+                    Write-Host "  |     $line" -ForegroundColor Yellow
+                }
+                Write-Host "  +-----------------------------------------------------------" -ForegroundColor Red
+                Write-Host ""
+                [void]$FailedSteps.Add("Python 3.12 (PATH/alias issue)")
             }
-            $pyLauncher = "C:\Windows\py.exe"
-            if (Test-Path $pyLauncher) {
-                Write-Host "  |   Py launcher is at:  $pyLauncher  (always on PATH)" -ForegroundColor Red
-            }
-            Write-Host "  |" -ForegroundColor Red
-            Write-Host "  |   What to do:" -ForegroundColor Yellow
-            foreach ($line in ((Get-RemediationHint -Label "Python 3.12") -split "`r?`n")) {
-                Write-Host "  |     $line" -ForegroundColor Yellow
-            }
-            Write-Host "  +-----------------------------------------------------------" -ForegroundColor Red
-            Write-Host ""
-            [void]$FailedSteps.Add("Python 3.12 (PATH/alias issue)")
         }
-    }
     }
 } else {
     Write-Host "[5/9] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
@@ -1307,7 +1337,7 @@ if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless"
         } else {
             Write-Host "      [WARN] 'elnora setup claude' returned non-zero. Output:" -ForegroundColor Yellow
             $setupOutput | ForEach-Object { Write-Host "             $_" -ForegroundColor Gray }
-            Write-Host "             Non-fatal -- the plugin still works for THIS" -ForegroundColor Gray
+            Write-Host "             Non-fatal - the plugin still works for THIS" -ForegroundColor Gray
             Write-Host "             project via .claude\settings.json in this repo." -ForegroundColor Gray
         }
     } else {
@@ -1405,7 +1435,9 @@ if ($claudeAvailable) {
         # CI/test escape hatch: print what would happen and exit cleanly. Used
         # by .github/workflows/install-smoke-test.yml so the smoke test doesn't
         # hang on Claude trying to open a browser for first-run auth.
+        # Echo the prompt itself so the smoke test has something to grep on.
         Write-Host "ELNORA_SKIP_HANDOFF=1 set - would invoke claude with the Phase 2 prompt. Skipping for non-interactive run." -ForegroundColor Gray
+        Write-Host "  Phase 2 prompt: $HandoffPrompt" -ForegroundColor Gray
         exit 0
     }
 
@@ -1416,13 +1448,16 @@ if ($claudeAvailable) {
     # didn't ship, especially when headless mode runs with bypassPermissions.
     #
     # Cases:
-    #   1. Marker + matching hash → proceed silently.
-    #   2. Marker + mismatched hash → exit 3, point user at the recovery.
-    #   3. No marker (pre-PR existing user) → warn once and proceed. PR2
-    #      tightens this with the H2 marker-on-existing-dir gate.
+    #   1. Marker + matching hash -> proceed silently.
+    #   2. Marker + mismatched hash -> exit 3, point user at the recovery.
+    #   3. No marker (pre-existing install from before integrity markers
+    #      shipped, or marker manually deleted) -> soft warn for the
+    #      interactive handoff; refuse for headless mode where claude
+    #      would run with bypassPermissions (see headless branch below).
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
     $markerFile = Join-Path $scriptDir ".elnora-starter-kit-marker"
     $docFile = Join-Path $scriptDir "INSTALL_FOR_AGENTS.md"
+    $markerMissing = $false
     if (Test-Path -LiteralPath $docFile) {
         if (Test-Path -LiteralPath $markerFile) {
             $markerLines = Get-Content -LiteralPath $markerFile
@@ -1446,7 +1481,9 @@ if ($claudeAvailable) {
                 exit 3
             }
         } else {
-            Write-Host "  (no integrity marker found - pre-PR install. Continuing without verification.)" -ForegroundColor Gray
+            $markerMissing = $true
+            Write-Host "  (no integrity marker found at $markerFile - this is a pre-existing install." -ForegroundColor Gray
+            Write-Host "   Continuing without doc-tamper verification for the interactive handoff.)" -ForegroundColor Gray
         }
     }
 
@@ -1461,7 +1498,26 @@ if ($claudeAvailable) {
         # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
         # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
         # that branch explicitly).
-        #
+
+        # Hard requirement for headless mode: the integrity marker MUST be
+        # present. The marker is what proves the doc claude is about to
+        # follow under bypassPermissions hasn't been swapped out. The
+        # interactive handoff can fall back to "warn and proceed" because a
+        # human is on the other end approving each tool call; headless
+        # mode is not allowed that latitude.
+        if ($markerMissing) {
+            Write-Host "[!] ELNORA_HANDOFF_MODE=headless requires .elnora-starter-kit-marker," -ForegroundColor Red
+            Write-Host "    which is missing at $markerFile." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "    The marker is the integrity gate that lets us run claude with" -ForegroundColor Red
+            Write-Host "    --permission-mode bypassPermissions. Without it we cannot prove" -ForegroundColor Red
+            Write-Host "    INSTALL_FOR_AGENTS.md is the doc we shipped." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "    To recover, re-run the bootstrap one-liner (writes a fresh marker):" -ForegroundColor Red
+            Write-Host "      irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex" -ForegroundColor Red
+            exit 4
+        }
+
         # bypassPermissions gate. Three states:
         #   1. Real CI (GITHUB_ACTIONS=true && CI=true) - proceed silently.
         #   2. Local opt-in (ELNORA_HANDOFF_LOCAL_BYPASS=1) - print a 5-second

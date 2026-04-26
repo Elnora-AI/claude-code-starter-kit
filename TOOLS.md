@@ -65,7 +65,7 @@ Headline commands:
 | `elnora auth login --api-key <key>` | Save an API key to `~/.elnora/profiles.toml` (mode 600). Every new shell stays authenticated. |
 | `elnora whoami` | Show current authenticated identity |
 | `elnora doctor` | Verify config, auth, and API connectivity in one shot |
-| `elnora setup-claude` | Post-auth helper — wires Elnora into your current Claude Code config |
+| `elnora setup claude` | Post-auth helper — wires Elnora into your current Claude Code config |
 | `elnora tasks` | Create, list, update wet-lab tasks |
 | `elnora projects` | Project management |
 | `elnora files` | Upload, version, search files |
