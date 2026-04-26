@@ -149,6 +149,22 @@ jobs:
           echo "ELNORA_KIT_DIR=$STAGED" >> "$GITHUB_ENV"
           ls -la "$STAGED"
 
+      - name: Write integrity marker (mirror install.sh)
+        # install.sh writes .elnora-starter-kit-marker on fresh extract; the
+        # setup script's headless mode now hard-refuses if the marker is
+        # missing. We bypass install.sh in this workflow (rsync from the
+        # workspace), so we have to mint the marker ourselves to match the
+        # real customer code path.
+        run: |
+          STAGED="${ELNORA_KIT_DIR:-${RUNNER_TEMP}/kit}"
+          sha=$(shasum -a 256 "$STAGED/INSTALL_FOR_AGENTS.md" | awk '{print $1}')
+          {
+            echo "version: 1"
+            echo "created: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "install_for_agents_sha256: $sha"
+          } > "$STAGED/.elnora-starter-kit-marker"
+          echo "  Wrote $STAGED/.elnora-starter-kit-marker (sha256=$sha)"
+
       - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
         # The agent in headless mode is NOT allowed to write under .claude/
         # paths (sensitive-paths guard fires there even with
@@ -393,6 +409,23 @@ jobs:
           $global:LASTEXITCODE = 0
           "ELNORA_KIT_DIR=$staged" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Get-ChildItem $staged | Format-Table Name, Length
+
+      - name: Write integrity marker (mirror install.ps1)
+        # install.ps1 writes .elnora-starter-kit-marker on fresh extract; the
+        # setup script's headless mode now hard-refuses if the marker is
+        # missing. We bypass install.ps1 in this workflow (robocopy from the
+        # workspace), so we have to mint the marker ourselves to match the
+        # real customer code path.
+        shell: pwsh
+        run: |
+          $staged = Join-Path $env:RUNNER_TEMP "kit"
+          $docPath = Join-Path $staged "INSTALL_FOR_AGENTS.md"
+          $hash = (Get-FileHash -Path $docPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $markerPath = Join-Path $staged ".elnora-starter-kit-marker"
+          $content = "version: 1`ncreated: $now`ninstall_for_agents_sha256: $hash`n"
+          [System.IO.File]::WriteAllText($markerPath, $content, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "  Wrote $markerPath (sha256=$hash)"
 
       - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
         # The agent in headless mode is NOT allowed to write under .claude/

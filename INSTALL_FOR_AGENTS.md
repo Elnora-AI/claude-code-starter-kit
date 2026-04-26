@@ -176,7 +176,7 @@ mode, follow these adjustments:
 ### 1. Read the install log
 
 ```
-cat ~/claude-starter-install.log | tail -100
+tail -100 ~/claude-starter-install.log
 ```
 
 (On Windows: `Get-Content $env:USERPROFILE\claude-starter-install.log -Tail 100`.)
@@ -723,7 +723,7 @@ tools), show the output, and explain what they're looking at.
 
 Tell the user:
 
-- ✅ Setup complete.
+- [OK] Setup complete.
 - The local repo lives at `<repo-path>`.
 - Their private GitHub repo is at
   `https://github.com/<gh-username>/<chosen-name>` (`origin`).

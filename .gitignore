@@ -60,6 +60,12 @@ azure-*.json
 # Ephemeral lock files written by the harness (e.g. scheduled_tasks.lock)
 .claude/*.lock
 
+# Setup-time integrity marker. install.sh / install.ps1 write this on
+# fresh extract; setup-mac.sh / setup-windows.ps1 verify the SHA against
+# INSTALL_FOR_AGENTS.md before handing off to claude. It's scaffolding,
+# not user content — keep it out of customers' initial commit.
+.elnora-starter-kit-marker
+
 # Runtime scratch folder — regenerable state, logs, downloaded artifacts
 # Keep the folder (README + .gitkeep) but ignore everything else inside
 cache/*

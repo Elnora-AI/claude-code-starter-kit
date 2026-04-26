@@ -30,6 +30,13 @@ export PATH="$HOME/.local/bin:$PATH"
 # Overwrites on each run - re-runs are idempotent, so keeping old logs around
 # isn't useful. Users hitting problems can paste the file path in support chats.
 LOG_FILE="$HOME/claude-starter-install.log"
+# Pre-create the file with mode 600 BEFORE tee touches it. tee honors umask
+# (typically 0644), so without this the log lands world-readable and any
+# other user on a shared Mac can read it. The script later prompts for an
+# Elnora API key and uses `read -rs` specifically to keep it out of this
+# log — locking the file down belt-and-suspenders.
+( umask 077 && : > "$LOG_FILE" ) || true
+chmod 600 "$LOG_FILE" 2>/dev/null || true
 exec > >(tee "$LOG_FILE") 2>&1
 
 FAILED_STEPS=()
@@ -207,6 +214,13 @@ EOF
 # messages on stdout, not stderr, so capturing stderr alone left the box
 # empty for the most common failures. PIPESTATUS[0] preserves the command's
 # exit code through the pipe (otherwise we'd get tee's exit code, always 0).
+#
+# WARNING for future maintainers: the FAILURE box echoes "$*" verbatim.
+# Today no caller passes a secret as a positional arg (the API key path
+# uses `read -rs` and stays in a local var). If you ever route a secret
+# through here — e.g. an OAuth token in argv — the failure box will leak
+# it to both the terminal and $LOG_FILE. Pre-redact or wrap such commands
+# in a small helper that prints a sanitized command line instead.
 run_step() {
     local label="$1"; shift
     local errfile code
@@ -313,6 +327,18 @@ fi
 # api.github.com/repos/.../releases/latest. Workshop hosts on shared wifi may
 # want to set this in the environment before kicking off the install.
 if [ -n "${ELNORA_CLI_VERSION:-}" ]; then
+    # Validate before use. The value flows into a `bash -c "... bash -s $val"`
+    # subshell below, so an unvalidated value like `v1.0; rm -rf ~` would be
+    # interpreted as a chained command. The published Elnora release tag
+    # format is `vMAJOR.MINOR[.PATCH]` (no suffixes, no whitespace), so any
+    # value outside `^v?\d+\.\d+(\.\d+)?$` is either a typo or an attack.
+    if ! printf '%s' "$ELNORA_CLI_VERSION" | grep -Eq '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+        echo "[!] ELNORA_CLI_VERSION='$ELNORA_CLI_VERSION' is not a valid release tag." >&2
+        echo "    Expected format: v1.2.3 (or 1.2.3, or v1.2). Refusing to use it" >&2
+        echo "    because it would be interpreted as shell input by the installer." >&2
+        echo "    Unset the variable or set it to a valid Elnora release tag and re-run." >&2
+        exit 1
+    fi
     elnora_install_args="$ELNORA_CLI_VERSION"
     elnora_install_label="$ELNORA_CLI_VERSION (pinned via ELNORA_CLI_VERSION)"
 else
@@ -324,6 +350,8 @@ if ! command -v elnora &> /dev/null; then
     echo "[2/10] Installing Elnora CLI ($elnora_install_label)..."
     echo "  Using Elnora's native installer (no prerequisites required)."
     # pipefail - see matching comment in the Claude Code block above.
+    # $elnora_install_args is regex-validated above (or empty), so the
+    # bash -s expansion is safe.
     if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $elnora_install_args"; then
         # Claude Code's step already exported PATH above, but be explicit in case
         # this script is ever re-ordered.
@@ -375,7 +403,42 @@ if ! command -v brew &> /dev/null; then
     echo "[3/10] Installing Homebrew..."
     echo "  Heads-up: this takes 5-15 min and will prompt for your Mac login"
     echo "  password. Password characters won't show as you type - that's normal."
-    if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+    # Fetch the installer first so we can detect curl failures explicitly.
+    # The previous form `bash -c "$(curl -fsSL ...)"` silently no-op'd when
+    # curl failed (DNS, 404, network) — `$(curl ...)` expanded to empty,
+    # `bash -c ""` exited 0, and we'd hit the success branch with no brew.
+    # We don't pipe through a second `bash` (Claude/Elnora pattern) because
+    # Homebrew's installer is interactive: it needs to prompt for a sudo
+    # password and read the "Press RETURN to continue" key, and we want to
+    # leave its stdin exactly the way it was.
+    brew_installer_script=""
+    if ! brew_installer_script="$(curl -fsSL --connect-timeout 30 --max-time 300 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
+        brew_curl_code=$?
+        echo "" >&2
+        echo "  +- FAILURE: Homebrew (curl could not fetch install.sh, exit $brew_curl_code)" >&2
+        echo "  | Could not download https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh" >&2
+        echo "  |" >&2
+        echo "  | What to do:" >&2
+        remediation_hint "Homebrew" | sed 's/^/  |   /' >&2
+        echo "  +----------------------------------------------------------" >&2
+        echo "" >&2
+        FAILED_STEPS+=("Homebrew (curl exit $brew_curl_code)")
+        brew_installer_script=""
+    fi
+    # Skip the installer run entirely if curl already failed above — we
+    # already printed a FAILURE box and recorded the step. Otherwise run
+    # the installer and branch on its exit.
+    brew_installer_ran=0
+    brew_installer_ok=0
+    if [ -n "$brew_installer_script" ]; then
+        brew_installer_ran=1
+        if /bin/bash -c "$brew_installer_script"; then
+            brew_installer_ok=1
+        else
+            brew_code=$?
+        fi
+    fi
+    if [ "$brew_installer_ok" = "1" ]; then
         if [ -x /opt/homebrew/bin/brew ]; then
             BREW_PREFIX="/opt/homebrew"
         elif [ -x /usr/local/bin/brew ]; then
@@ -402,8 +465,7 @@ if ! command -v brew &> /dev/null; then
             persist_brew_path "$BREW_PREFIX"
             echo "  Done."
         fi
-    else
-        brew_code=$?
+    elif [ "$brew_installer_ran" = "1" ]; then
         echo "" >&2
         echo "  +- FAILURE: Homebrew (installer exited $brew_code)" >&2
         echo "  | The Homebrew install script did not complete successfully." >&2
@@ -418,6 +480,8 @@ if ! command -v brew &> /dev/null; then
         echo "" >&2
         FAILED_STEPS+=("Homebrew (installer exit $brew_code)")
     fi
+    # When brew_installer_ran=0 (curl failure above), we already printed and
+    # recorded the failure, so fall through silently.
 else
     echo "[3/10] Homebrew already installed. Skipping."
     # Persist the PATH even on skip - prior runs may have installed brew without
@@ -940,7 +1004,7 @@ EOF
     # The starter kit's project-scope .claude/settings.json already enables
     # the plugin for THIS directory, so this step only matters for using
     # Elnora skills OUTSIDE this repo. It also clears the `elnora doctor`
-    # "Plugin enabled — settings.json not found" warning, which only reads
+    # "Plugin enabled - settings.json not found" warning, which only reads
     # user-scope settings.
     #
     # NOTE: this does NOT touch MCP. The Elnora MCP server's auth flow is
@@ -1015,7 +1079,9 @@ if command -v claude >/dev/null 2>&1; then
         # CI/test escape hatch: print what would happen and exit cleanly. Used
         # by .github/workflows/install-smoke-test.yml so the smoke test doesn't
         # hang on Claude trying to open a browser for first-run auth.
+        # Echo the prompt itself so the smoke test has something to grep on.
         echo "ELNORA_SKIP_HANDOFF=1 set - would exec claude with the Phase 2 prompt. Skipping for non-interactive run."
+        echo "  Phase 2 prompt: $HANDOFF_PROMPT"
         exit 0
     fi
 
@@ -1026,13 +1092,30 @@ if command -v claude >/dev/null 2>&1; then
     # didn't ship, especially when headless mode runs with bypassPermissions.
     #
     # Cases:
-    #   1. Marker + matching hash → proceed silently (the happy path).
-    #   2. Marker + mismatched hash → exit 3, point user at the recovery.
-    #   3. No marker (pre-PR existing user) → warn once and proceed. PR2
-    #      tightens this path with the H2 marker-on-existing-dir gate.
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    #   1. Marker + matching hash -> proceed silently (the happy path).
+    #   2. Marker + mismatched hash -> exit 3, point user at the recovery.
+    #   3. No marker (pre-existing install from before integrity markers
+    #      shipped, or marker manually deleted) -> soft warn for the
+    #      interactive handoff; refuse for headless mode where claude
+    #      would run with bypassPermissions (see headless branch below).
+
+    # Resolve SCRIPT_DIR with a fallback. ${BASH_SOURCE[0]} is the right
+    # answer when this file was sourced or executed by name. It's empty
+    # when the script is read on stdin (`bash < setup-mac.sh`) and equals
+    # `/dev/stdin` or `-` for some piped invocations. Fall back to $0,
+    # then to $PWD, so the marker check still finds the right directory
+    # for power users who run `bash ~/Documents/elnora-starter-kit/setup-mac.sh`
+    # from outside the kit dir.
+    script_path="${BASH_SOURCE[0]:-$0}"
+    if [ -z "$script_path" ] || [ "$script_path" = "/dev/stdin" ] || [ "$script_path" = "-" ]; then
+        SCRIPT_DIR="$PWD"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "$script_path")" 2>/dev/null && pwd)"
+        [ -z "$SCRIPT_DIR" ] && SCRIPT_DIR="$PWD"
+    fi
     MARKER_FILE="$SCRIPT_DIR/.elnora-starter-kit-marker"
     DOC_FILE="$SCRIPT_DIR/INSTALL_FOR_AGENTS.md"
+    marker_missing=0
     if [ -f "$DOC_FILE" ]; then
         if [ -f "$MARKER_FILE" ]; then
             expected_sha=$(awk -F': ' '/^install_for_agents_sha256:/ {print $2}' "$MARKER_FILE" | tr -d '[:space:]')
@@ -1049,7 +1132,9 @@ if command -v claude >/dev/null 2>&1; then
                 exit 3
             fi
         else
-            echo "  (no integrity marker found - pre-PR install. Continuing without verification.)"
+            marker_missing=1
+            echo "  (no integrity marker found at $MARKER_FILE - this is a pre-existing install."
+            echo "   Continuing without doc-tamper verification for the interactive handoff.)"
         fi
     fi
 
@@ -1064,7 +1149,26 @@ if command -v claude >/dev/null 2>&1; then
         # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
         # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
         # that branch explicitly).
-        #
+
+        # Hard requirement for headless mode: the integrity marker MUST be
+        # present. The marker is what proves the doc claude is about to
+        # follow under bypassPermissions hasn't been swapped out. The
+        # interactive handoff can fall back to "warn and proceed" because a
+        # human is on the other end approving each tool call; headless
+        # mode is not allowed that latitude.
+        if [ "$marker_missing" = "1" ]; then
+            echo "[!] ELNORA_HANDOFF_MODE=headless requires .elnora-starter-kit-marker," >&2
+            echo "    which is missing at $MARKER_FILE." >&2
+            echo "" >&2
+            echo "    The marker is the integrity gate that lets us run claude with" >&2
+            echo "    --permission-mode bypassPermissions. Without it we cannot prove" >&2
+            echo "    INSTALL_FOR_AGENTS.md is the doc we shipped." >&2
+            echo "" >&2
+            echo "    To recover, re-run the bootstrap one-liner (writes a fresh marker):" >&2
+            echo "      curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash" >&2
+            exit 4
+        fi
+
         # bypassPermissions gate. Three states:
         #   1. Real CI (GITHUB_ACTIONS=true && CI=true) - proceed silently.
         #   2. Local opt-in (ELNORA_HANDOFF_LOCAL_BYPASS=1) - print a 5-second
