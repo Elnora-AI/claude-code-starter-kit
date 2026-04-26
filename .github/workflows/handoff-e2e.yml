@@ -14,8 +14,21 @@ name: handoff-e2e
 #   ELNORA_API_KEY_TEST - elnora_live_* key. Recommend a dedicated test
 #                         account, not your personal one — every run will
 #                         hit `elnora whoami` and `elnora doctor`.
+#   PAT_TOKEN_TEST      - GitHub PAT used to exercise the gh auth + repo
+#                         create + push path in headless mode. Each run
+#                         creates a private repo named
+#                         `elnora-handoff-ci-<run_id>` on the PAT owner's
+#                         account and deletes it during cleanup. Required
+#                         scopes:
+#                           Classic PAT: `repo` + `delete_repo`.
+#                           Fine-grained: Administration R+W, Contents R+W,
+#                                         Metadata R, on "all repositories"
+#                                         (we create new repos each run).
+#                         Use a dedicated bot account if possible — a
+#                         leaked token here can read/write/delete every
+#                         repo on the owning account.
 #
-# Set both at:
+# Set all three at:
 #   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
 #
 # Security note on the workflow_dispatch `os` input below: it's a `choice`
@@ -47,6 +60,18 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
       ELNORA_HANDOFF_MODE: headless
+      # PAT used by Claude in step 6 of INSTALL_FOR_AGENTS.md (headless
+      # branch). The agent pipes this into `gh auth login --with-token`,
+      # then runs `gh repo create` against the PAT owner's account.
+      # Custom name (not GH_TOKEN) so `gh` doesn't auto-detect it before
+      # the agent runs `gh auth login` — we want the test to exercise
+      # the explicit auth path.
+      ELNORA_HANDOFF_GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+      # Deterministic per-run repo name: github.run_id is a monotonic
+      # numeric ID assigned by GitHub Actions, so it's collision-free
+      # across reruns and safe to interpolate into shell (no injection
+      # surface — it's not user-controlled).
+      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}
       # Pin to bypass the Elnora installer's api.github.com call for "latest
       # release". CI runner IP pools routinely exhaust the unauthenticated
       # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
@@ -67,6 +92,10 @@ jobs:
             echo "::error::ELNORA_API_KEY_TEST secret is not set"
             exit 1
           fi
+          if [ -z "$ELNORA_HANDOFF_GH_TOKEN" ]; then
+            echo "::error::PAT_TOKEN_TEST secret is not set"
+            exit 1
+          fi
           # Quick sanity check on the secret shapes — catches a swapped paste.
           case "$ANTHROPIC_API_KEY" in
             sk-ant-*) echo "ANTHROPIC_API_KEY shape OK" ;;
@@ -75,6 +104,12 @@ jobs:
           case "$ELNORA_API_KEY" in
             elnora_live_*) echo "ELNORA_API_KEY shape OK" ;;
             *) echo "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"; exit 1 ;;
+          esac
+          # Both classic (ghp_, gho_, ghu_, ghr_, ghs_) and fine-grained
+          # (github_pat_) PAT prefixes are valid; just sanity-check the prefix.
+          case "$ELNORA_HANDOFF_GH_TOKEN" in
+            ghp_*|gho_*|ghu_*|ghr_*|ghs_*|github_pat_*) echo "PAT_TOKEN_TEST shape OK" ;;
+            *) echo "::error::PAT_TOKEN_TEST does not look like a GitHub PAT (gh[poursr]_* or github_pat_*)"; exit 1 ;;
           esac
 
       - name: Pre-set git config (skip Read prompt)
@@ -114,9 +149,10 @@ jobs:
           p = pathlib.Path(sys.argv[1])
           s = p.read_text()
           before = len(s)
-          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***',     s)
-          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***', s)
-          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***',         s)
+          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',          'sk-ant-***REDACTED***',     s)
+          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+',      'elnora_live_***REDACTED***', s)
+          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}',      'ghX_***REDACTED***',         s)
+          s = re.sub(r'github_pat_[A-Za-z0-9_]{20,}',     'github_pat_***REDACTED***',  s)
           p.write_text(s)
           print(f"Scrubbed transcript: {before} -> {len(s)} bytes")
           PY
@@ -139,6 +175,31 @@ jobs:
           chmod +x tests/handoff/assert.sh
           tests/handoff/assert.sh "$PWD" "$ELNORA_HANDOFF_TRANSCRIPT"
 
+      - name: Clean up test GitHub repo
+        # Always runs — even when assertions fail or the agent crashed
+        # mid-flow — so we never leave orphan repos cluttering the test
+        # account. Tolerates the "repo never got created" case quietly.
+        if: always()
+        env:
+          # Reuse the same PAT for cleanup. `gh` reads GH_TOKEN
+          # automatically, no need for `gh auth login` here.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+        run: |
+          if [ -z "${ELNORA_HANDOFF_REPO_NAME:-}" ]; then
+            echo "ELNORA_HANDOFF_REPO_NAME unset; nothing to clean up"
+            exit 0
+          fi
+          OWNER=$(gh api user --jq .login 2>/dev/null || echo "")
+          if [ -z "$OWNER" ]; then
+            echo "Could not resolve PAT owner via gh api user; skipping cleanup"
+            exit 0
+          fi
+          echo "Attempting to delete $OWNER/$ELNORA_HANDOFF_REPO_NAME"
+          # `gh repo delete --yes` exits non-zero if the repo doesn't exist;
+          # that's fine in cleanup — swallow it.
+          gh repo delete "$OWNER/$ELNORA_HANDOFF_REPO_NAME" --yes 2>&1 || \
+            echo "(repo did not exist or delete failed; continuing)"
+
       - name: Upload transcript as artifact
         if: always()
         uses: actions/upload-artifact@v7
@@ -157,6 +218,12 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
       ELNORA_HANDOFF_MODE: headless
+      # See macOS job for why this exists and why it's NOT named GH_TOKEN.
+      ELNORA_HANDOFF_GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+      # Deterministic per-run repo name. github.run_id is a numeric ID
+      # assigned by GitHub Actions — collision-free across reruns and
+      # safe to interpolate (not user-controlled).
+      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}
       # Pin to bypass the Elnora installer's api.github.com call for "latest
       # release". CI runner IP pools routinely exhaust the unauthenticated
       # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
@@ -180,12 +247,21 @@ jobs:
             Write-Host "::error::ELNORA_API_KEY_TEST secret is not set"
             exit 1
           }
+          if (-not $env:ELNORA_HANDOFF_GH_TOKEN) {
+            Write-Host "::error::PAT_TOKEN_TEST secret is not set"
+            exit 1
+          }
           if ($env:ANTHROPIC_API_KEY -notlike "sk-ant-*") {
             Write-Host "::error::ANTHROPIC_API_KEY does not start with sk-ant-"
             exit 1
           }
           if ($env:ELNORA_API_KEY -notlike "elnora_live_*") {
             Write-Host "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"
+            exit 1
+          }
+          $patOK = $env:ELNORA_HANDOFF_GH_TOKEN -match '^(ghp_|gho_|ghu_|ghr_|ghs_|github_pat_)'
+          if (-not $patOK) {
+            Write-Host "::error::PAT_TOKEN_TEST does not look like a GitHub PAT (gh[poursr]_* or github_pat_*)"
             exit 1
           }
           Write-Host "Secret shapes OK"
@@ -220,9 +296,10 @@ jobs:
           }
           $s = Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Raw
           $before = $s.Length
-          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***')
-          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***')
-          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***')
+          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',          'sk-ant-***REDACTED***')
+          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+',      'elnora_live_***REDACTED***')
+          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}',      'ghX_***REDACTED***')
+          $s = [regex]::Replace($s, 'github_pat_[A-Za-z0-9_]{20,}',     'github_pat_***REDACTED***')
           Set-Content -Path $env:ELNORA_HANDOFF_TRANSCRIPT -Value $s -NoNewline
           Write-Host "Scrubbed transcript: $before -> $($s.Length) bytes"
 
@@ -254,6 +331,30 @@ jobs:
         shell: pwsh
         run: |
           .\tests\handoff\assert.ps1 -RepoDir $PWD -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
+
+      - name: Clean up test GitHub repo
+        # See matching step in macOS job. Always runs so we never leave
+        # orphan repos cluttering the test account.
+        if: always()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+        run: |
+          if (-not $env:ELNORA_HANDOFF_REPO_NAME) {
+            Write-Host "ELNORA_HANDOFF_REPO_NAME unset; nothing to clean up"
+            exit 0
+          }
+          $owner = (gh api user --jq .login 2>$null)
+          if (-not $owner) {
+            Write-Host "Could not resolve PAT owner via gh api user; skipping cleanup"
+            exit 0
+          }
+          Write-Host "Attempting to delete $owner/$env:ELNORA_HANDOFF_REPO_NAME"
+          gh repo delete "$owner/$env:ELNORA_HANDOFF_REPO_NAME" --yes 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "(repo did not exist or delete failed; continuing)"
+          }
+          $global:LASTEXITCODE = 0
 
       - name: Upload transcript as artifact
         if: always()

@@ -94,14 +94,48 @@ if (Test-Path .git) {
     } else {
         Assert-Fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
     }
-    # In headless mode the GitHub bootstrap is skipped — there should be NO
-    # remotes. (Interactive mode adds 'origin'; CI never runs interactive.)
+    # Two branches based on whether the workflow provisioned a PAT and
+    # asked the agent to do the GitHub bootstrap.
     $remotes = git -C $RepoDir remote 2>$null
     $remoteCount = if ($remotes) { ($remotes | Measure-Object -Line).Lines } else { 0 }
-    if ($remoteCount -eq 0) {
-        Assert-Ok "no git remotes configured (expected in headless mode — GitHub bootstrap was skipped)"
+    if ($env:ELNORA_HANDOFF_REPO_NAME) {
+        # PAT path — expect exactly one remote 'origin' pointing at the
+        # CI-named repo, with HEAD == origin/main and visibility = PRIVATE.
+        if ($remoteCount -eq 1 -and $remotes -eq "origin") {
+            Assert-Ok "exactly one remote 'origin' configured"
+        } else {
+            Assert-Fail "expected exactly one remote 'origin', found ${remoteCount}: $($remotes -join ' ')"
+        }
+        $originUrl = git -C $RepoDir remote get-url origin 2>$null
+        if (-not $originUrl) { $originUrl = "" }
+        if ($originUrl -match [regex]::Escape("/$env:ELNORA_HANDOFF_REPO_NAME")) {
+            Assert-Ok "origin URL contains repo name '$env:ELNORA_HANDOFF_REPO_NAME' ($originUrl)"
+        } else {
+            Assert-Fail "origin URL does not reference '$env:ELNORA_HANDOFF_REPO_NAME': got '$originUrl'"
+        }
+        $localHead = git -C $RepoDir rev-parse HEAD 2>$null
+        $remoteHead = git -C $RepoDir rev-parse origin/main 2>$null
+        if ($localHead -and $localHead -eq $remoteHead) {
+            Assert-Ok "local HEAD matches origin/main ($localHead)"
+        } else {
+            Assert-Fail "local HEAD ($localHead) != origin/main ($remoteHead)"
+        }
+        # `gh repo view` needs auth. The agent ran `gh auth login --with-token`
+        # earlier, so gh's config already has the token persisted on this runner.
+        $visibility = gh repo view $env:ELNORA_HANDOFF_REPO_NAME --json visibility --jq .visibility 2>$null
+        if ($visibility -eq "PRIVATE") {
+            Assert-Ok "GitHub repo $env:ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE"
+        } else {
+            $shown = if ($visibility) { $visibility } else { "<unreachable>" }
+            Assert-Fail "expected GitHub repo $env:ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE, got '$shown'"
+        }
     } else {
-        Assert-Fail "expected 0 remotes in headless mode, found ${remoteCount}: $($remotes -join ' ')"
+        # Legacy headless path — no PAT provisioned, GitHub bootstrap skipped.
+        if ($remoteCount -eq 0) {
+            Assert-Ok "no git remotes configured (expected — GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
+        } else {
+            Assert-Fail "expected 0 remotes (no PAT provisioned), found ${remoteCount}: $($remotes -join ' ')"
+        }
     }
     $global:LASTEXITCODE = 0
 } else {

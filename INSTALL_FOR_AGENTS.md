@@ -48,11 +48,37 @@ mode, follow these adjustments:
     write directly with a single `Bash` call to
     `python3 -c "open('.claude/knowledge-base.local.md','w').write('''<contents>''')"`
     (or PowerShell `Set-Content` on Windows) and move on.
-- **Step 6 (GitHub bootstrap):** in headless mode, do step 6a (verify `gh`
-  is installed) and step 6c.1+6c.2 (init + commit) only. **Skip 6b (auth),
-  6c.3+6c.4+6c.5 (repo create / push / fetch verify), and 6d.** The
-  handoff-e2e workflow has no GitHub credentials, no browser, and no
-  user; the local-state assertions in the checklist below are sufficient.
+- **Step 6 (GitHub bootstrap):** branches on whether
+  `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
+  - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
+    handoff-e2e workflow), do step 6 in full but with these adjustments:
+    - **6b (auth):** instead of opening a browser, pipe the token into
+      `gh auth login --with-token`:
+
+      ```
+      printf '%s' "$ELNORA_HANDOFF_GH_TOKEN" | gh auth login --with-token --hostname github.com
+      gh auth setup-git
+      ```
+
+      Then run the 6b verification gates as written. (`printf` avoids
+      the trailing newline that `echo` adds, which `gh` rejects.)
+    - **6c.3 (repo name):** do NOT prompt — use the value of
+      `$ELNORA_HANDOFF_REPO_NAME` (CI sets this to
+      `elnora-handoff-ci-<github_run_id>`) as the chosen name. Validate
+      it matches `[A-Za-z0-9._-]+` like the doc says, but skip the user
+      conversation.
+    - **6c.4 (create+push):** run `gh repo create "$ELNORA_HANDOFF_REPO_NAME"
+      --private --source=. --push` and run all four gates as written
+      (exit 0, origin URL, no `elnora-upstream`, visibility = `"PRIVATE"`).
+    - **6c.5 (fetch verify):** run as written.
+    - **6d (show user / browser):** skip — there is no user. Run
+      `gh repo view "$ELNORA_HANDOFF_REPO_NAME" --json url,visibility,owner`
+      so the result lands in the transcript for debugging, but do NOT
+      run `gh repo view --web`.
+  - **If `ELNORA_HANDOFF_GH_TOKEN` is unset** (local headless dev with
+    no PAT available), do step 6a (verify `gh` is installed) and
+    step 6c.1+6c.2 (init + commit) only. Skip 6b, 6c.3+6c.4+6c.5, and
+    6d.
 - **Step 9 (Sample protocol):** skip — there is no user to wow.
 - **Before printing `HANDOFF_COMPLETE`, verify ALL of these are true.** If
   any item is missing, finish it before declaring complete:
@@ -61,12 +87,18 @@ mode, follow these adjustments:
      authed).
   2. `.git/` exists and `git log --oneline | wc -l` is `>= 1` (the initial
      commit landed locally).
-  3. **Interactive mode:** `git remote -v` shows exactly one remote,
-     `origin`, pointing at `https://github.com/<gh-username>/<repo>.git`;
-     `git rev-parse HEAD` equals `git rev-parse origin/main`; and
-     `gh repo view --json visibility --jq .visibility` returns `"PRIVATE"`.
-     **Headless mode:** `git remote -v` is empty (no remotes) — GitHub
-     bootstrap was skipped on purpose.
+  3. Git remote state depends on which branch of step 6 ran:
+     - **Interactive mode** OR **headless mode with
+       `ELNORA_HANDOFF_GH_TOKEN` set:** `git remote -v` shows exactly
+       one remote, `origin`, pointing at
+       `https://github.com/<gh-username>/<repo>.git`;
+       `git rev-parse HEAD` equals `git rev-parse origin/main`; and
+       `gh repo view --json visibility --jq .visibility` returns
+       `"PRIVATE"`. (In headless CI, `<repo>` is
+       `$ELNORA_HANDOFF_REPO_NAME`.)
+     - **Headless mode without `ELNORA_HANDOFF_GH_TOKEN`:**
+       `git remote -v` is empty — GitHub bootstrap was skipped on
+       purpose.
   4. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
   5. `CLAUDE.md` no longer contains the `### First-run setup` heading or
