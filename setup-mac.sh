@@ -326,7 +326,9 @@ if ! command -v elnora &> /dev/null; then
         # this script is ever re-ordered.
         export PATH="$HOME/.local/bin:$PATH"
         echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed - restart terminal')"
-        echo "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)."
+        echo "  Next: paste your API key when prompted in step [3/3] of the auth section below,"
+        echo "        or run 'elnora auth login --api-key <key>' later. Get a key at"
+        echo "        https://platform.elnora.ai/settings (API Keys tab)."
     fi
 else
     current_elnora_version="$(elnora --version 2>/dev/null || echo 'unknown')"
@@ -765,16 +767,16 @@ echo ""
 
 # Bypass entire auth section in CI / non-interactive modes.
 if [ "${ELNORA_SKIP_HANDOFF:-}" = "1" ] || [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
-    echo "  (Skipped — non-interactive run.)"
+    echo "  (Skipped - non-interactive run.)"
     echo ""
 else
     # ---- Claude auth ----
     echo "[1/3] Claude Code"
     if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-        echo "      ANTHROPIC_API_KEY set — using API key, skipping OAuth."
+        echo "      ANTHROPIC_API_KEY set - using API key, skipping OAuth."
     elif claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
         email=$(claude auth status --json 2>/dev/null | grep -o '"email"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
-        echo "      ✓ Already logged in as ${email:-unknown}"
+        echo "      [OK] Already logged in as ${email:-unknown}"
     else
         echo "      Not logged in. A browser will open so you can sign in."
         echo "      [Y]es / [s]kip+continue without Claude / [q]uit script"
@@ -784,14 +786,14 @@ else
             [Yy]*|"")
                 if claude auth login --claudeai; then
                     if claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
-                        echo "      ✓ Logged in."
+                        echo "      [OK] Logged in."
                     else
-                        echo "      ✗ Login flow returned but auth status still shows not logged in."
+                        echo "      [FAIL] Login flow returned but auth status still shows not logged in."
                         echo "         Run manually:  claude auth login --claudeai"
                         exit 1
                     fi
                 else
-                    echo "      ✗ Login didn't complete. Re-run when ready:  bash setup-mac.sh"
+                    echo "      [FAIL] Login didn't complete. Re-run when ready:  bash setup-mac.sh"
                     exit 1
                 fi
                 ;;
@@ -802,7 +804,7 @@ else
   |                                                            |
   |   You skipped Claude Code login.                           |
   |                                                            |
-  |   That's fine — but Phase 2 (where Claude finishes setup)  |
+  |   That's fine - but Phase 2 (where Claude finishes setup)  |
   |   needs an authenticated session, so we can't continue     |
   |   right now.                                               |
   |                                                            |
@@ -811,7 +813,7 @@ else
   |     cd ~/Documents/elnora-starter-kit                      |
   |     bash setup-mac.sh                                      |
   |                                                            |
-  |   Re-running is safe — installs are skipped if already     |
+  |   Re-running is safe - installs are skipped if already     |
   |   present, and the script picks up at the auth step.       |
   |                                                            |
   +============================================================+
@@ -834,10 +836,10 @@ EOF
     # ---- GitHub auth ----
     echo "[2/3] GitHub CLI"
     if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
-        echo "      GH_TOKEN/GITHUB_TOKEN set — skipping OAuth."
+        echo "      GH_TOKEN/GITHUB_TOKEN set - skipping OAuth."
     elif gh auth status >/dev/null 2>&1; then
         gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
-        echo "      ✓ Already logged in as $gh_user"
+        echo "      [OK] Already logged in as $gh_user"
     else
         echo "      Not logged in. Phase 2 needs this to create your starter repo."
         echo "      [Y]es / [s]kip (Phase 2 will prompt you again later)"
@@ -846,13 +848,13 @@ EOF
         case "${answer:-Y}" in
             [Yy]*|"")
                 if gh auth login --web --hostname github.com --git-protocol https; then
-                    echo "      ✓ Logged in."
+                    echo "      [OK] Logged in."
                 else
-                    echo "      ⚠ Login didn't complete. Phase 2 will prompt you."
+                    echo "      [WARN] Login didn't complete. Phase 2 will prompt you."
                 fi
                 ;;
             *)
-                echo "      ⊘ Skipped. To do later:  gh auth login --web"
+                echo "      [SKIP] To do later:  gh auth login --web"
                 ;;
         esac
     fi
@@ -861,31 +863,38 @@ EOF
     # ---- Elnora auth ----
     echo "[3/3] Elnora CLI"
     if [ -n "${ELNORA_API_KEY:-}" ]; then
-        echo "      ELNORA_API_KEY set — skipping prompt."
+        echo "      ELNORA_API_KEY set - skipping prompt."
     elif elnora auth status 2>/dev/null | grep -q '"authenticated"[[:space:]]*:[[:space:]]*true'; then
-        echo "      ✓ Already authenticated."
+        echo "      [OK] Already authenticated."
     else
         echo "      Not authenticated. Elnora uses an API key (not browser OAuth)."
-        echo "      Get one at:  https://app.elnora.ai/settings/api-keys"
+        echo "      Get one at:  https://platform.elnora.ai/settings (API Keys tab)"
         echo "      [P]aste key now / [s]kip (Elnora MCP will prompt on first use)"
         printf "      > "
         read -r answer
         case "${answer:-s}" in
             [Pp]*)
                 printf "      API key (starts with elnora_live_): "
-                read -r elnora_key
+                # `read -s` so the key isn't echoed to the terminal — and
+                # therefore not captured by the `tee "$LOG_FILE"` redirect
+                # at the top of the script. Otherwise the customer's
+                # elnora_live_* key ends up in ~/claude-starter-install.log,
+                # which is exactly the file they're encouraged to share with
+                # support if anything goes wrong.
+                read -rs elnora_key
+                printf "\n"
                 if [ -n "$elnora_key" ]; then
                     if elnora auth login --api-key "$elnora_key" >/dev/null 2>&1; then
-                        echo "      ✓ Saved."
+                        echo "      [OK] Saved."
                     else
-                        echo "      ✗ Login failed. Try manually:  elnora auth login --api-key <key>"
+                        echo "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
                     fi
                 else
-                    echo "      ⊘ Empty key — skipped."
+                    echo "      [SKIP] Empty key."
                 fi
                 ;;
             *)
-                echo "      ⊘ Skipped. To do later:  elnora auth login --api-key <key>"
+                echo "      [SKIP] To do later:  elnora auth login --api-key <key>"
                 ;;
         esac
     fi
@@ -897,8 +906,8 @@ echo "  Quick PATH note"
 echo "==========================================="
 echo ""
 echo "  The 'claude' and 'elnora' commands are at ~/.local/bin/."
-echo "  • In any terminal opened AFTER this install: works automatically."
-echo "  • In a terminal opened BEFORE this install (rare):"
+echo "  - In any terminal opened AFTER this install: works automatically."
+echo "  - In a terminal opened BEFORE this install (rare):"
 echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
 echo "    or just open a fresh terminal window."
 echo ""
