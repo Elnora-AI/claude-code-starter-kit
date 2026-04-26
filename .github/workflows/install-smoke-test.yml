@@ -14,16 +14,13 @@ name: install-smoke-test
 #   - Neither windows-2022 nor windows-2025 runners include winget by default
 #     (they ship Chocolatey instead — winget runs on App Installer, a Microsoft
 #     Store package only available on Win10/11 consumer SKUs, not Windows
-#     Server). Real Win10/11 attendees have winget pre-installed. We tried
-#     installing winget on the runner via the Cyberboss/install-winget action
-#     but its action.yml has invalid expression syntax (double-quoted strings
-#     where GitHub Actions requires single quotes), and the repo is archived
-#     so that won't be fixed. Instead, we set ELNORA_SKIP_OPTIONAL_INSTALLS=1
-#     which makes setup-windows.ps1 skip the two truly optional winget steps
-#     (VS Code, Obsidian). The smoke test still validates the core path:
-#     Claude Code install, Elnora CLI install, Group Policy WindowsApps PATH
-#     fallback, the FAILURE-grep gate. Test winget paths via Option C (real
-#     Windows VM) when needed.
+#     Server). Real Win10/11 attendees have winget pre-installed.
+#     To exercise the winget paths in CI we install winget via Microsoft's
+#     official PowerShell module: Microsoft.WinGet.Client + the
+#     Repair-WinGetPackageManager cmdlet, which is designed exactly for this
+#     "winget missing on Server" case. Without this, setup-windows.ps1's
+#     winget-dependent steps (Node/Git/Python/VS Code/gh/Obsidian — i.e. most
+#     of them) would all fail in CI, masking real bugs.
 #   - Shared CI runner IP pools routinely exhaust the GitHub API's 60/hour
 #     unauthenticated rate limit. setup-mac.sh and setup-windows.ps1 work
 #     around this by pinning the Elnora CLI version, which bypasses the
@@ -102,14 +99,24 @@ jobs:
           git config --global user.name "CI Smoke Test"
           git config --global user.email "ci@elnora-starter-kit.test"
 
+      - name: Install winget via Microsoft.WinGet.Client module
+        # Windows-Server runners don't ship winget. Microsoft publishes an
+        # official PowerShell module that exposes Repair-WinGetPackageManager
+        # specifically for this case — installs winget + dependencies even
+        # when the Microsoft Store / App Installer isn't available.
+        # https://learn.microsoft.com/en-us/windows/package-manager/winget/
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop | Out-Null
+          Install-Module -Name Microsoft.WinGet.Client -Force -Scope CurrentUser -Repository PSGallery -ErrorAction Stop
+          Repair-WinGetPackageManager -Latest -Force
+          Write-Host "winget version: $(winget --version)"
+
       - name: Run setup-windows.ps1 with handoff skipped
         shell: pwsh
         env:
           ELNORA_SKIP_HANDOFF: "1"
-          # Skip VS Code and Obsidian — both require winget which Windows
-          # Server runners don't have. See workflow header comment for why
-          # we don't install winget on the runner.
-          ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           .\setup-windows.ps1
