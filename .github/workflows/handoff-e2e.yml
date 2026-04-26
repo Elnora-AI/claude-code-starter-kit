@@ -47,6 +47,12 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
       ELNORA_HANDOFF_MODE: headless
+      # Pin to bypass the Elnora installer's api.github.com call for "latest
+      # release". CI runner IP pools routinely exhaust the unauthenticated
+      # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
+      # This workflow tests Phase 2 (handoff); Phase 1 install resilience is
+      # tested by install-smoke-test.yml. Bump when cutting a new release.
+      ELNORA_CLI_VERSION: v1.5.0
       ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
     steps:
       - uses: actions/checkout@v4
@@ -151,6 +157,12 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
       ELNORA_HANDOFF_MODE: headless
+      # Pin to bypass the Elnora installer's api.github.com call for "latest
+      # release". CI runner IP pools routinely exhaust the unauthenticated
+      # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
+      # This workflow tests Phase 2 (handoff); Phase 1 install resilience is
+      # tested by install-smoke-test.yml. Bump when cutting a new release.
+      ELNORA_CLI_VERSION: v1.5.0
       ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}\handoff-transcript.jsonl
       # Same rationale as install-smoke-test.yml — windows-2022 has no winget.
       ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
