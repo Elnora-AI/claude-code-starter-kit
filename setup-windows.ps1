@@ -744,6 +744,46 @@ if (-not (Test-Path $projectsDir)) {
     Write-Host "[9/9] Projects folder already exists. Skipping." -ForegroundColor Gray
 }
 
+# --- chrome-devtools MCP override (Windows-only) ---
+# The committed .mcp.json uses bare `npx`, which a stdio MCP host can't
+# resolve cleanly on Windows. Write a user-level ~/.claude/.mcp.json that
+# wraps the same command in `cmd /c`, so the chrome-devtools server spawns
+# correctly. User-level config overrides project-level for this user only;
+# macOS / Linux teammates who clone the same repo are unaffected.
+# See docs/chrome-devtools-mcp-setup.md for the full picture.
+$claudeConfigDir = Join-Path $env:USERPROFILE ".claude"
+$mcpConfigPath = Join-Path $claudeConfigDir ".mcp.json"
+if (-not (Test-Path $claudeConfigDir)) {
+    New-Item -ItemType Directory -Path $claudeConfigDir -Force | Out-Null
+}
+$cdtBlock = [pscustomobject]@{
+    type    = "stdio"
+    command = "cmd"
+    args    = @("/c", "npx", "chrome-devtools-mcp@latest", "--autoConnect")
+}
+try {
+    if (Test-Path $mcpConfigPath) {
+        # Merge: only touch the chrome-devtools entry, leave other servers alone.
+        $existing = Get-Content $mcpConfigPath -Raw | ConvertFrom-Json
+        if (-not $existing.mcpServers) {
+            $existing | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) -Force
+        }
+        $existing.mcpServers | Add-Member -NotePropertyName "chrome-devtools" -NotePropertyValue $cdtBlock -Force
+        $existing | ConvertTo-Json -Depth 10 | Out-File -FilePath $mcpConfigPath -Encoding utf8
+        Write-Host "[OK] Updated $mcpConfigPath with chrome-devtools (cmd /c npx) override" -ForegroundColor Green
+    } else {
+        $newConfig = [pscustomobject]@{
+            mcpServers = [pscustomobject]@{ "chrome-devtools" = $cdtBlock }
+        }
+        $newConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $mcpConfigPath -Encoding utf8
+        Write-Host "[OK] Created $mcpConfigPath with chrome-devtools (cmd /c npx) override" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "[WARN] Could not write chrome-devtools override to $mcpConfigPath - $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "       chrome-devtools MCP may not work until you fix this manually." -ForegroundColor Yellow
+    Write-Host "       See docs/chrome-devtools-mcp-setup.md for the expected file shape." -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host "==========================================="
 Write-Host "  Install summary"

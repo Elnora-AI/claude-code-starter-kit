@@ -20,7 +20,8 @@
       "Bash",
       "mcp__context7__*",
       "mcp__grep__*",
-      "mcp__elnora__*"
+      "mcp__elnora__*",
+      "mcp__chrome-devtools__*"
     ],
     "deny": [
       "Bash(git push --force)",
