@@ -86,11 +86,22 @@ Write-Host ""
 Write-Host "[git]"
 if (Test-Path .git) {
     Assert-Ok ".git directory exists"
-    $upstream = git remote get-url elnora-upstream 2>$null
-    if ($LASTEXITCODE -eq 0 -and $upstream) {
-        Assert-Ok "elnora-upstream remote is set ($upstream)"
+    $commitCount = (git -C $RepoDir log --oneline 2>$null | Measure-Object -Line).Lines
+    if ($commitCount -ge 1) {
+        $branch = git -C $RepoDir symbolic-ref --short HEAD 2>$null
+        if (-not $branch) { $branch = "?" }
+        Assert-Ok "git history has $commitCount commit(s) on $branch"
     } else {
-        Assert-Fail "elnora-upstream remote was not configured"
+        Assert-Fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
+    }
+    # In headless mode the GitHub bootstrap is skipped — there should be NO
+    # remotes. (Interactive mode adds 'origin'; CI never runs interactive.)
+    $remotes = git -C $RepoDir remote 2>$null
+    $remoteCount = if ($remotes) { ($remotes | Measure-Object -Line).Lines } else { 0 }
+    if ($remoteCount -eq 0) {
+        Assert-Ok "no git remotes configured (expected in headless mode — GitHub bootstrap was skipped)"
+    } else {
+        Assert-Fail "expected 0 remotes in headless mode, found $remoteCount: $($remotes -join ' ')"
     }
     $global:LASTEXITCODE = 0
 } else {

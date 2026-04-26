@@ -69,11 +69,19 @@ echo ""
 echo "[git]"
 if [ -d .git ]; then
     ok ".git directory exists"
-    if git remote get-url elnora-upstream >/dev/null 2>&1; then
-        upstream=$(git remote get-url elnora-upstream)
-        ok "elnora-upstream remote is set ($upstream)"
+    commit_count=$(git -C "$REPO_DIR" log --oneline 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$commit_count" -ge 1 ]; then
+        ok "git history has $commit_count commit(s) on $(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || echo '?')"
     else
-        fail "elnora-upstream remote was not configured"
+        fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
+    fi
+    # In headless mode the GitHub bootstrap is skipped — there should be NO
+    # remotes. (Interactive mode adds 'origin'; CI never runs interactive.)
+    remote_count=$(git -C "$REPO_DIR" remote 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$remote_count" -eq 0 ]; then
+        ok "no git remotes configured (expected in headless mode — GitHub bootstrap was skipped)"
+    else
+        fail "expected 0 remotes in headless mode, found $remote_count: $(git -C "$REPO_DIR" remote | tr '\n' ' ')"
     fi
 else
     fail ".git directory was not created"

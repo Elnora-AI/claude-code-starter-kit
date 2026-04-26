@@ -98,6 +98,40 @@ idempotent and upgrades in place.
 
 ---
 
+## Set up your GitHub repo manually (fallback)
+
+Phase 2 normally creates your private GitHub repo for you. If the automated
+flow didn't run (no Claude Pro/Max, install failure, or you ran setup
+without launching Claude after), here's the equivalent by hand. Run these
+in the starter-kit directory:
+
+```bash
+# 1. Authenticate the GitHub CLI (browser flow):
+gh auth login --hostname github.com --git-protocol https --web
+
+# 2. Verify auth:
+gh auth status
+
+# 3. Initialize the local repo on main, commit everything:
+git init -q
+git symbolic-ref HEAD refs/heads/main
+git add .
+git commit -q -m "Initial commit"
+
+# 4. Create your private repo and push the starter kit to it.
+#    The default name is <your-github-username>-agents (e.g. carmen-agents):
+gh repo create "$(gh api user --jq .login)-agents" --private --source=. --push
+
+# 5. Verify it landed on main:
+git fetch origin
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] && echo OK
+```
+
+If any step fails, see [`../RECOVERY.md`](../RECOVERY.md) → "GitHub auth
+fails" or "GitHub repo creation fails."
+
+---
+
 ## Authenticate Elnora AI
 
 The setup script installs the Elnora CLI and pre-wires the hosted MCP server at
