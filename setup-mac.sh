@@ -292,18 +292,30 @@ fi
 # We deliberately run this before Homebrew / Node so the order stays
 # "AI surfaces first, toolchain second" and so the Elnora binary is ready
 # the moment a user opens Claude Code.
+#
+# We always install the LATEST release so users get current bug fixes and
+# features. To keep the upgrade path tight, we re-run the installer even
+# when `elnora` is already on PATH — Elnora's installer is idempotent and a
+# no-op when the existing binary already matches the latest release.
+#
+# Escape hatch: set ELNORA_CLI_VERSION (e.g. "v1.5.0") to pin to a specific
+# release. Useful behind a corporate NAT where many machines share an IP and
+# can exhaust GitHub's 60/hr unauthenticated rate limit on
+# api.github.com/repos/.../releases/latest. Workshop hosts on shared wifi may
+# want to set this in the environment before kicking off the install.
+if [ -n "${ELNORA_CLI_VERSION:-}" ]; then
+    elnora_install_args="$ELNORA_CLI_VERSION"
+    elnora_install_label="$ELNORA_CLI_VERSION (pinned via ELNORA_CLI_VERSION)"
+else
+    elnora_install_args=""
+    elnora_install_label="latest"
+fi
+
 if ! command -v elnora &> /dev/null; then
-    # Pin the Elnora CLI version to bypass the installer's GitHub API call for
-    # release-resolution. Without a pin, the installer hits
-    # api.github.com/repos/.../releases/latest which is rate-limited to 60/hour
-    # per IP — fine for a home user, but corporate-NAT pharma networks can
-    # exhaust quota across many users, and shared CI runner IP pools hit it
-    # routinely. Bump this when a newer release should be the workshop default.
-    ELNORA_CLI_VERSION="v1.5.0"
-    echo "[2/10] Installing Elnora CLI ($ELNORA_CLI_VERSION)..."
+    echo "[2/10] Installing Elnora CLI ($elnora_install_label)..."
     echo "  Using Elnora's native installer (no prerequisites required)."
     # pipefail — see matching comment in the Claude Code block above.
-    if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $ELNORA_CLI_VERSION"; then
+    if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $elnora_install_args"; then
         # Claude Code's step already exported PATH above, but be explicit in case
         # this script is ever re-ordered.
         export PATH="$HOME/.local/bin:$PATH"
@@ -311,7 +323,12 @@ if ! command -v elnora &> /dev/null; then
         echo "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)."
     fi
 else
-    echo "[2/10] Elnora CLI already installed: $(elnora --version 2>/dev/null || echo 'installed'). Skipping."
+    current_elnora_version="$(elnora --version 2>/dev/null || echo 'unknown')"
+    echo "[2/10] Elnora CLI already installed ($current_elnora_version) — refreshing to $elnora_install_label..."
+    if run_step "Elnora CLI upgrade" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $elnora_install_args"; then
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed — restart terminal')"
+    fi
 fi
 
 # --- [3/10] Homebrew ---
@@ -566,11 +583,39 @@ fi
 
 echo ""
 echo "==========================================="
-echo "  Setup complete!"
+echo "  Install summary"
 echo "==========================================="
 echo ""
 # Refresh shell command lookup cache so newly-installed binaries are visible.
 hash -r 2>/dev/null || true
+
+# Color codes for the install summary. Use $'...' so the escape sequences are
+# resolved at assignment time and printf prints the actual bytes. If stdout
+# isn't a TTY (e.g. piped to a file), strip the colors so the log stays clean.
+if [ -t 1 ]; then
+    GREEN=$'\033[1;32m'
+    RED=$'\033[1;31m'
+    NC=$'\033[0m'
+else
+    GREEN=""
+    RED=""
+    NC=""
+fi
+CHECK="✓"
+CROSS="✗"
+
+# print_status "<label>" "<version-or-empty>"
+# Empty / "not found" version => red ✗ NOT INSTALLED
+# Anything else                => green ✓ <version>
+print_status() {
+    local label="$1"
+    local version="$2"
+    if [ -z "$version" ] || [ "$version" = "not found" ]; then
+        printf "  %s%s%s %-12s %sNOT INSTALLED%s\n" "$RED" "$CROSS" "$NC" "$label:" "$RED" "$NC"
+    else
+        printf "  %s%s%s %-12s %s%s%s\n" "$GREEN" "$CHECK" "$NC" "$label:" "$GREEN" "$version" "$NC"
+    fi
+}
 
 # VS Code: `code` may not be on PATH until the user runs
 # "Shell Command: Install 'code' command in PATH" from VS Code's palette.
@@ -587,7 +632,7 @@ vscode_version() {
             echo "installed — run \"Shell Command: Install code command in PATH\" from VS Code"
         fi
     else
-        echo "not found"
+        echo ""
     fi
 }
 
@@ -601,23 +646,44 @@ obsidian_version() {
             echo "installed"
         fi
     else
-        echo "not found"
+        echo ""
     fi
 }
 
-echo "  Node.js:     $(node --version 2>/dev/null || echo 'not found')"
-echo "  Git:         $(git --version 2>/dev/null || echo 'not found')"
-echo "  Python:      $(python3 --version 2>/dev/null || echo 'not found')"
-echo "  VS Code:     $(vscode_version)"
-echo "  Claude Code: $(claude --version 2>/dev/null || echo 'not found')"
-echo "  Elnora CLI:  $(elnora --version 2>/dev/null || echo 'not found')"
-echo "  GitHub CLI:  $(gh --version 2>/dev/null | head -1 || echo 'not found')"
-echo "  Obsidian:    $(obsidian_version)"
+print_status "Node.js"     "$(node --version 2>/dev/null || true)"
+print_status "Git"         "$(git --version 2>/dev/null || true)"
+print_status "Python"      "$(python3 --version 2>/dev/null || true)"
+print_status "VS Code"     "$(vscode_version)"
+print_status "Claude Code" "$(claude --version 2>/dev/null || true)"
+print_status "Elnora CLI"  "$(elnora --version 2>/dev/null || true)"
+print_status "GitHub CLI"  "$(gh --version 2>/dev/null | head -1 || true)"
+print_status "Obsidian"    "$(obsidian_version)"
+echo ""
+
+# Quick scan: count anything still missing so the user sees a clear pass/fail
+# headline regardless of whether they read every row.
+MISSING_COUNT=0
+for v in \
+    "$(node --version 2>/dev/null || true)" \
+    "$(git --version 2>/dev/null || true)" \
+    "$(python3 --version 2>/dev/null || true)" \
+    "$(vscode_version)" \
+    "$(claude --version 2>/dev/null || true)" \
+    "$(elnora --version 2>/dev/null || true)" \
+    "$(gh --version 2>/dev/null | head -1 || true)" \
+    "$(obsidian_version)"; do
+    [ -z "$v" ] && MISSING_COUNT=$((MISSING_COUNT + 1))
+done
+if [ "$MISSING_COUNT" -eq 0 ]; then
+    printf "  %sAll 8 components installed.%s\n" "$GREEN" "$NC"
+else
+    printf "  %s%d component(s) NOT installed — see red ✗ rows above and remediation below.%s\n" "$RED" "$MISSING_COUNT" "$NC"
+fi
 echo ""
 
 if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
     echo "==========================================="
-    echo "  ⚠  ${#FAILED_STEPS[@]} step(s) failed — remediation below"
+    echo "  ${#FAILED_STEPS[@]} step(s) failed — remediation below"
     echo "==========================================="
     for step_entry in "${FAILED_STEPS[@]}"; do
         # Strip trailing "(exit N)" or "(...)" to recover the bare label for lookup.

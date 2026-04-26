@@ -98,20 +98,21 @@ See the full list of 40+ plugins on [github.com/anthropics/knowledge-work-plugin
 
 **Source**: github.com/Elnora-AI/elnora-plugins
 **Trust level**: High — maintained by Elnora AI (the platform that powers this starter kit)
-**Status**: Registered with `autoUpdate: true`. No plugins enabled by default — browse and install via `/plugins`.
+**Status**: Registered with `autoUpdate: true`. The `elnora` plugin is **enabled by default** in `.claude/settings.json`, so the 8 bioprotocol skills load automatically on first launch and stay on the latest release as the marketplace publishes updates.
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
-| **elnora** | Elnora MCP server + 8 bioprotocol skills (`elnora-platform`, `-orgs`, `-projects`, `-tasks`, `-files`, `-folders`, `-search`, `-admin`) | Generating, versioning, and managing wet-lab protocols from Claude Code |
+| **elnora** ⭐ | 8 bioprotocol skills (`elnora-platform`, `-orgs`, `-projects`, `-tasks`, `-files`, `-folders`, `-search`, `-admin`) wired to the Elnora MCP server | Generating, versioning, and managing wet-lab protocols from Claude Code |
 
-Install hint:
-```
-/plugin install elnora@elnora-plugins
-```
+⭐ = enabled by default in this starter kit.
 
-The MCP server is already pre-wired in `.mcp.json` (no manual install needed) —
-installing the plugin additionally loads the 8 skills. On first MCP call, a
-browser window opens for OAuth. Or run `elnora auth login` any time to pre-auth.
+Three independent pieces — all stay current automatically:
+
+- **Elnora CLI** — installed by `setup-mac.sh` / `setup-windows.ps1` from `cli.elnora.ai`. Always pulls the **latest** release; re-running setup refreshes the binary in place. Set `ELNORA_CLI_VERSION` (e.g. `v1.5.0`) only if you need to pin behind a corporate NAT that hits GitHub rate limits.
+- **Elnora MCP server** — pre-wired in `.mcp.json` as a remote HTTP endpoint (`https://mcp.elnora.ai/mcp`). Nothing to install locally; server-side updates apply immediately. OAuth on first call.
+- **Elnora skills/agents/commands** — bundled inside the `elnora` plugin. Because the marketplace has `autoUpdate: true`, Claude Code refreshes the plugin from `Elnora-AI/elnora-plugins` automatically.
+
+If new plugins are added to the `elnora-plugins` marketplace later, enable them by adding `"<plugin-name>@elnora-plugins": true` to the `enabledPlugins` block of `.claude/settings.json`.
 
 ### 6. Community Workflows (`claude-code-workflows`)
 

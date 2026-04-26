@@ -27,6 +27,11 @@ irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.
 
 Total runtime: 10–15 minutes on a fresh machine.
 
+These bootstrap commands and the setup scripts they invoke download installers
+over HTTPS and execute them without separate checksum verification. Running
+the kit means trusting `raw.githubusercontent.com/Elnora-AI/elnora-starter-kit`,
+`claude.ai`, and `cli.elnora.ai`.
+
 ## Install flow
 
 1. **Phase 1 — automated install (~5–10 min).** Clones the repo to
@@ -42,6 +47,29 @@ Total runtime: 10–15 minutes on a fresh machine.
    optionally configures an Obsidian knowledge base.
 4. **Verification.** Claude generates a sample protocol to confirm the
    end-to-end setup.
+
+## What gets installed and why
+
+Each component plays a distinct role in the workflow:
+
+- **Claude Code** — the orchestrating agent. Interprets natural-language
+  instructions, plans the work, and invokes the Elnora CLI and other tools
+  to execute it. This is the interface you interact with.
+- **Elnora CLI and MCP server** — the domain executor. Generates
+  preclinical lab protocols and performs the substantive scientific
+  reasoning. Claude calls `elnora` commands and the MCP server (configured
+  in `.mcp.json`); Elnora does the work.
+- **Python 3 and Node.js** — runtimes for the supporting tooling. Most
+  Claude Code plugins and MCP servers ship as Node packages; several
+  utility scripts run on Python. Both are required for the kit to function.
+- **Git and GitHub CLI** — version control and GitHub integration. Used to
+  clone the kit, track changes to your protocols and notes, and optionally
+  publish your repository.
+- **VS Code** — editor for reviewing and editing the files Claude
+  produces, alongside the terminal session.
+- **Obsidian** — knowledge-base viewer. Renders the markdown files in your
+  vault as a navigable graph so you can browse generated protocols, notes,
+  and references outside the terminal.
 
 ## Repository layout
 

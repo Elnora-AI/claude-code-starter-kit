@@ -454,12 +454,35 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 # Elnora's installer downloads a pre-built binary to %USERPROFILE%\.elnora\bin
 # and updates User PATH. No winget/Node required. "AI surfaces first,
 # toolchain second" mirrors the macOS script.
-if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
-    # Pin the Elnora CLI version to bypass the installer's GitHub API call —
-    # see matching comment in setup-mac.sh step 2 for the rate-limit rationale.
-    # Bump this when a newer release should be the workshop default.
-    $elnoraCliVersion = "v1.5.0"
-    Write-Host "[2/9] Installing Elnora CLI ($elnoraCliVersion)..." -ForegroundColor Green
+# We always install the LATEST release so users get current bug fixes and
+# features. To keep the upgrade path tight, we re-run the installer even
+# when `elnora` is already on PATH — Elnora's installer is idempotent and a
+# no-op when the existing binary already matches the latest release.
+#
+# Escape hatch: set $env:ELNORA_CLI_VERSION (e.g. "v1.5.0") to pin to a
+# specific release. Useful behind a corporate NAT where many machines share
+# an IP and can exhaust GitHub's 60/hr unauthenticated rate limit on
+# api.github.com/repos/.../releases/latest. Workshop hosts on shared wifi
+# may want to set this in the environment before kicking off the install.
+if ($env:ELNORA_CLI_VERSION) {
+    $elnoraCliVersion = $env:ELNORA_CLI_VERSION
+    $elnoraInstallLabel = "$elnoraCliVersion (pinned via ELNORA_CLI_VERSION)"
+} else {
+    $elnoraCliVersion = ""
+    $elnoraInstallLabel = "latest"
+}
+
+# Build the installer invocation. Passing an empty -Version arg lets the
+# installer fall through to its default (latest GitHub release).
+$elnoraInstallerCommand = if ($elnoraCliVersion) {
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1'))) -Version '$elnoraCliVersion'"
+} else {
+    "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1')))"
+}
+
+$elnoraIsInstalled = [bool](Get-Command elnora -ErrorAction SilentlyContinue)
+if (-not $elnoraIsInstalled) {
+    Write-Host "[2/9] Installing Elnora CLI ($elnoraInstallLabel)..." -ForegroundColor Green
     Write-Host "  Using Elnora's native installer (no prerequisites required)." -ForegroundColor Gray
     # Sub-process isolation: see matching comment in the Claude Code block above.
     # The Elnora installer has 8 `exit 1` paths (GitHub API failure, 404 on
@@ -478,7 +501,7 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     # for some content types (including what cli.elnora.ai serves install.ps1
     # as), and `[scriptblock]::Create($byteArray)` then chokes trying to parse
     # decimal byte values like "35 32 69 108..." as PowerShell syntax.
-    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1'))) -Version '$elnoraCliVersion'" }
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand }
     Update-SessionPath
 
     # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
@@ -503,7 +526,11 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     }
     Write-Host "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)." -ForegroundColor Gray
 } else {
-    Write-Host "[2/9] Elnora CLI already installed. Skipping." -ForegroundColor Gray
+    $currentElnoraVersion = (& elnora --version 2>$null)
+    if (-not $currentElnoraVersion) { $currentElnoraVersion = "unknown" }
+    Write-Host "[2/9] Elnora CLI already installed ($currentElnoraVersion) - refreshing to $elnoraInstallLabel..." -ForegroundColor Green
+    Invoke-Step "Elnora CLI upgrade" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand }
+    Update-SessionPath
 }
 
 # --- [3/9] Node.js ---
@@ -718,16 +745,21 @@ if (-not (Test-Path $projectsDir)) {
 }
 
 Write-Host ""
-Write-Host "===========================================" -ForegroundColor Cyan
-Write-Host "  Setup complete!" -ForegroundColor Cyan
-Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host "==========================================="
+Write-Host "  Install summary"
+Write-Host "==========================================="
 Write-Host ""
 Update-SessionPath
+
+# Force UTF-8 output so the unicode check / cross marks render. PS 5.1 defaults
+# to OEM codepage which mangles them — without this, ✓ shows as garbled bytes
+# in the very summary row that's supposed to scream "all good".
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 function Get-ToolVersion {
     param([string]$Name, [string]$VersionArg = "--version")
     $cmd = Get-Command $Name -ErrorAction SilentlyContinue
-    if (-not $cmd) { return "not found" }
+    if (-not $cmd) { return "" }
     try {
         $out = & $Name $VersionArg 2>$null | Select-Object -First 1
         if ($out) { return $out } else { return "installed" }
@@ -744,13 +776,35 @@ function Get-AppInstalled {
             if ($v) { return "installed ($v)" } else { return "installed" }
         } catch { return "installed" }
     } else {
-        return "not found"
+        return ""
     }
 }
 
-Write-Host "  Node.js:     $(Get-ToolVersion 'node')" -ForegroundColor White
-Write-Host "  Git:         $(Get-ToolVersion 'git')" -ForegroundColor White
-Write-Host "  Python:      $(Get-ToolVersion 'python')" -ForegroundColor White
+# Write-Status "<label>" "<version-or-empty>"
+# Empty / "not found" version => red [X] NOT INSTALLED
+# Anything else                => green [OK] <version>
+function Write-Status {
+    param([string]$Label, [string]$Version)
+    $padded = ($Label + ":").PadRight(13)
+    if (-not $Version -or $Version -eq "not found") {
+        Write-Host "  " -NoNewline
+        Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline   # ✗
+        Write-Host " $padded " -NoNewline
+        Write-Host "NOT INSTALLED" -ForegroundColor Red
+    } else {
+        Write-Host "  " -NoNewline
+        Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline  # ✓
+        Write-Host " $padded " -NoNewline
+        Write-Host $Version -ForegroundColor Green
+    }
+}
+
+# Compute every tool's version up-front so the summary AND the headline use the
+# same data. Storing in an ordered dict keeps output order stable.
+$results = [ordered]@{}
+$results["Node.js"]     = Get-ToolVersion 'node'
+$results["Git"]         = Get-ToolVersion 'git'
+$results["Python"]      = Get-ToolVersion 'python'
 
 $vscodeExe = @(
     "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
@@ -758,14 +812,15 @@ $vscodeExe = @(
     "${env:ProgramFiles(x86)}\Microsoft VS Code\Code.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($vscodeExe) {
-    Write-Host "  VS Code:     $(Get-AppInstalled $vscodeExe 'VS Code')" -ForegroundColor White
+    $results["VS Code"] = Get-AppInstalled $vscodeExe 'VS Code'
 } else {
-    Write-Host "  VS Code:     $(Get-ToolVersion 'code')" -ForegroundColor White
+    $results["VS Code"] = Get-ToolVersion 'code'
 }
 
-Write-Host "  Claude Code: $(Get-ToolVersion 'claude')" -ForegroundColor White
-Write-Host "  Elnora CLI:  $(Get-ToolVersion 'elnora')" -ForegroundColor White
-Write-Host "  GitHub CLI:  $(Get-ToolVersion 'gh')" -ForegroundColor White
+$results["Claude Code"] = Get-ToolVersion 'claude'
+$results["Elnora CLI"]  = Get-ToolVersion 'elnora'
+$results["GitHub CLI"]  = Get-ToolVersion 'gh'
+
 $obsidianExe = @(
     "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
     "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
@@ -774,51 +829,66 @@ $obsidianExe = @(
     "${env:ProgramFiles(x86)}\Obsidian\Obsidian.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($obsidianExe) {
-    Write-Host "  Obsidian:    $(Get-AppInstalled $obsidianExe 'Obsidian')" -ForegroundColor White
+    $results["Obsidian"] = Get-AppInstalled $obsidianExe 'Obsidian'
 } else {
-    $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
+    $wingetHas = $null
+    if ($hasWinget) {
+        $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
+    }
     if ($wingetHas) {
-        Write-Host "  Obsidian:    installed (winget)" -ForegroundColor White
+        $results["Obsidian"] = "installed (winget)"
     } else {
-        Write-Host "  Obsidian:    not found" -ForegroundColor White
+        $results["Obsidian"] = ""
     }
 }
+
+foreach ($key in $results.Keys) {
+    Write-Status $key $results[$key]
+}
+
+$missing = @($results.GetEnumerator() | Where-Object { -not $_.Value -or $_.Value -eq "not found" }).Count
+$total   = $results.Count
 Write-Host ""
-Write-Host "  Note: if anything shows 'not found' above, open a new PowerShell/VS Code window and re-check." -ForegroundColor Gray
+if ($missing -eq 0) {
+    Write-Host "  All $total components installed." -ForegroundColor Green
+} else {
+    Write-Host "  $missing component(s) NOT installed - see red X rows above and remediation below." -ForegroundColor Red
+    Write-Host "  If something says NOT INSTALLED but you think it is, open a new PowerShell/VS Code window and re-check."
+}
 Write-Host ""
-Write-Host "-------------------------------------------" -ForegroundColor Cyan
-Write-Host "  IMPORTANT — to see the new PATH in VS Code:" -ForegroundColor Yellow
-Write-Host "  Quit VS Code FULLY (File -> Exit), then reopen it." -ForegroundColor Yellow
-Write-Host "  Closing just the terminal panel is not enough —" -ForegroundColor Yellow
-Write-Host "  VS Code caches its PATH at app launch time." -ForegroundColor Yellow
-Write-Host "-------------------------------------------" -ForegroundColor Cyan
+Write-Host "-------------------------------------------"
+Write-Host "  IMPORTANT - to see the new PATH in VS Code:"
+Write-Host "  Quit VS Code FULLY (File -> Exit), then reopen it."
+Write-Host "  Closing just the terminal panel is not enough -"
+Write-Host "  VS Code caches its PATH at app launch time."
+Write-Host "-------------------------------------------"
 Write-Host ""
 
 if ($FailedSteps.Count -gt 0) {
-    Write-Host "===========================================" -ForegroundColor Yellow
-    Write-Host "  ⚠  $($FailedSteps.Count) step(s) failed — remediation below" -ForegroundColor Yellow
-    Write-Host "===========================================" -ForegroundColor Yellow
+    Write-Host "==========================================="
+    Write-Host "  $($FailedSteps.Count) step(s) failed - remediation below"
+    Write-Host "==========================================="
     foreach ($stepEntry in $FailedSteps) {
         # Strip trailing "(exit N)" / "(message)" to recover the bare label for lookup.
         $stepLabel = ($stepEntry -replace '\s*\([^)]*\)\s*$', '').Trim()
         if (-not $stepLabel) { $stepLabel = $stepEntry }
         Write-Host ""
-        Write-Host "-- $stepEntry --" -ForegroundColor Yellow
+        Write-Host "-- $stepEntry --"
         $hint = Get-RemediationHint -Label $stepLabel
         foreach ($line in ($hint -split "`r?`n")) {
-            Write-Host "  $line" -ForegroundColor Gray
+            Write-Host "  $line"
         }
     }
     Write-Host ""
-    Write-Host "Once you've fixed the issue(s), re-run:  .\setup-windows.ps1" -ForegroundColor Yellow
-    Write-Host "The script is idempotent — already-installed steps are skipped." -ForegroundColor Yellow
-    Write-Host "===========================================" -ForegroundColor Yellow
+    Write-Host "Once you've fixed the issue(s), re-run:  .\setup-windows.ps1"
+    Write-Host "The script is idempotent - already-installed steps are skipped."
+    Write-Host "==========================================="
     Write-Host ""
 }
 
-Write-Host "===========================================" -ForegroundColor Cyan
-Write-Host "  Phase 1 complete - handing off to Claude" -ForegroundColor Cyan
-Write-Host "===========================================" -ForegroundColor Cyan
+Write-Host "==========================================="
+Write-Host "  Phase 1 complete - handing off to Claude"
+Write-Host "==========================================="
 Write-Host ""
 
 # Close the transcript before handing off, so the log file is flushed and
