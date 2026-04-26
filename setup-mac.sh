@@ -532,7 +532,12 @@ else
 fi
 
 # --- [7/10] VS Code ---
-if ! command -v code &> /dev/null && [ ! -d "/Applications/Visual Studio Code.app" ]; then
+if [ "${ELNORA_SKIP_OPTIONAL_INSTALLS:-}" = "1" ]; then
+    # CI/test escape hatch — mirrors setup-windows.ps1. Used by
+    # handoff-e2e.yml and bootstrap-e2e.yml so the test runner doesn't burn
+    # ~14s/run installing optional editors that the test never exercises.
+    echo "[7/10] VS Code: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run."
+elif ! command -v code &> /dev/null && [ ! -d "/Applications/Visual Studio Code.app" ]; then
     echo "[7/10] Installing VS Code..."
     run_step "VS Code" brew install --cask visual-studio-code && echo "  Done."
 else
@@ -569,7 +574,9 @@ else
 fi
 
 # --- [9/10] Obsidian (optional - knowledge base) ---
-if [ ! -d "/Applications/Obsidian.app" ]; then
+if [ "${ELNORA_SKIP_OPTIONAL_INSTALLS:-}" = "1" ]; then
+    echo "[9/10] Obsidian: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run."
+elif [ ! -d "/Applications/Obsidian.app" ]; then
     echo "[9/10] Installing Obsidian (optional)..."
     run_step "Obsidian" brew install --cask obsidian && echo "  Done."
 else

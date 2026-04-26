@@ -59,6 +59,10 @@ jobs:
       # scripts. Bump when cutting a new Elnora CLI release.
       ELNORA_CLI_VERSION: v1.5.0
       ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
+      # Same rationale as handoff-e2e.yml's macOS job and the Windows job
+      # below — macos-14 ships without VS Code/Obsidian, so the brew casks
+      # install on every run for nothing. Saves ~14s/run.
+      ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
     steps:
       - uses: actions/checkout@v6
 
@@ -73,6 +77,7 @@ jobs:
         run: |
           git config --global user.name "Bootstrap E2E"
           git config --global user.email "bootstrap-e2e@elnora-starter-kit.test"
+
 
       - name: Stage fake Obsidian vault for KB auto-detect
         run: |

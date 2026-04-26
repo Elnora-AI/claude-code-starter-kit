@@ -81,6 +81,11 @@ jobs:
       # tested by install-smoke-test.yml. Bump when cutting a new release.
       ELNORA_CLI_VERSION: v1.5.0
       ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
+      # Skip VS Code + Obsidian casks. macos-14 runners ship without them, so
+      # brew installs them every run for nothing — the test never opens an
+      # editor or vault. Same flag and rationale as the Windows job below
+      # (and as bootstrap-e2e.yml). Saves ~14s/run on the cask installs.
+      ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
     steps:
       - uses: actions/checkout@v6
 
@@ -124,7 +129,28 @@ jobs:
           mkdir -p "$HOME/Documents/test-vault/.obsidian"
           echo "# Test vault" > "$HOME/Documents/test-vault/README.md"
 
+      - name: Stage kit into clean dir (mirror customer code path)
+        # install.sh strips tests/ and .github/ before running setup-mac.sh
+        # (install.sh:57). Running setup-mac.sh from the live workspace
+        # checkout instead means the agent sees CI-only files in CWD that
+        # real customers never see — a real test/prod divergence. Stage the
+        # kit into a separate dir without those files so the agent's working
+        # tree matches what install.sh produces. Excludes match install.sh
+        # exactly + .git/ (customers extract from a tarball, no git history).
+        run: |
+          STAGED="${RUNNER_TEMP}/kit"
+          rm -rf "$STAGED"
+          mkdir -p "$STAGED"
+          rsync -a \
+            --exclude='.github/' \
+            --exclude='tests/' \
+            --exclude='.git/' \
+            "$GITHUB_WORKSPACE/" "$STAGED/"
+          echo "ELNORA_KIT_DIR=$STAGED" >> "$GITHUB_ENV"
+          ls -la "$STAGED"
+
       - name: Run setup-mac.sh in headless handoff mode
+        working-directory: ${{ runner.temp }}/kit
         run: |
           chmod +x setup-mac.sh
           # The script will: install all tools, then enter headless handoff
@@ -182,7 +208,11 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
         run: |
           chmod +x tests/handoff/assert.sh
-          tests/handoff/assert.sh "$PWD" "$ELNORA_HANDOFF_TRANSCRIPT"
+          # assert.sh runs from the workspace (where tests/ lives), pointed
+          # at the staged kit (where setup-mac.sh ran and CLAUDE.md/.git
+          # were created). Falls back to $PWD on the off chance the staging
+          # step was skipped, so this stays valid in older branches.
+          tests/handoff/assert.sh "${ELNORA_KIT_DIR:-$PWD}" "$ELNORA_HANDOFF_TRANSCRIPT"
 
       - name: Clean up test GitHub repo
         # Always runs — even when assertions fail or the agent crashed
@@ -287,8 +317,31 @@ jobs:
           New-Item -ItemType Directory -Force -Path $vault | Out-Null
           Set-Content -Path (Join-Path $env:USERPROFILE "Documents\test-vault\README.md") -Value "# Test vault"
 
+      - name: Stage kit into clean dir (mirror customer code path)
+        # See matching comment in the macOS job above. install.ps1 strips
+        # tests/ and .github/ before running setup-windows.ps1
+        # (install.ps1:96-97). We mirror that here so the agent's CWD
+        # matches what real customers see.
+        shell: pwsh
+        run: |
+          $staged = Join-Path $env:RUNNER_TEMP "kit"
+          if (Test-Path $staged) { Remove-Item $staged -Recurse -Force }
+          New-Item -ItemType Directory -Path $staged | Out-Null
+          # Robocopy is the standard Windows mirror tool. /MIR mirrors the
+          # tree; /XD excludes directories by name. Robocopy exit codes:
+          # 0-7 = success (1 = files copied, 2 = extra files in dest, etc.);
+          # 8+ = failure. PowerShell sees any non-zero $LASTEXITCODE as a
+          # red error in the log even though it's actually success — clear
+          # it so this step doesn't go red on a normal exit code 1.
+          robocopy $env:GITHUB_WORKSPACE $staged /MIR /XD .github tests .git /NFL /NDL /NJH /NJS /NP
+          if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE }
+          $global:LASTEXITCODE = 0
+          "ELNORA_KIT_DIR=$staged" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-ChildItem $staged | Format-Table Name, Length
+
       - name: Run setup-windows.ps1 in headless handoff mode
         shell: pwsh
+        working-directory: ${{ runner.temp }}/kit
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           .\setup-windows.ps1
@@ -342,7 +395,11 @@ jobs:
           # `gh repo view` a token to read the test repo's visibility.
           GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
         run: |
-          .\tests\handoff\assert.ps1 -RepoDir $PWD -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
+          # assert.ps1 runs from the workspace (where tests/ lives), pointed
+          # at the staged kit (where setup-windows.ps1 ran and CLAUDE.md/.git
+          # were created). Falls back to $PWD if staging was skipped.
+          $repoDir = if ($env:ELNORA_KIT_DIR) { $env:ELNORA_KIT_DIR } else { "$PWD" }
+          .\tests\handoff\assert.ps1 -RepoDir $repoDir -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
 
       - name: Clean up test GitHub repo
         # See matching step in macOS job. Always runs so we never leave

@@ -52,6 +52,16 @@ function Update-SessionPath {
     $env:Path = ($parts -join ";")
 }
 
+# Self-defense: ensure user-local bin is on Path from line 1.
+# This makes the script work even when re-run from a terminal that was
+# opened before any prior install (where %USERPROFILE%\.local\bin isn't
+# yet in the inherited Path). Idempotent -- no harm if the dir doesn't
+# exist yet.
+$localBin = Join-Path $env:USERPROFILE ".local\bin"
+if ($env:Path -notlike "*$localBin*") {
+    $env:Path = "$localBin;$env:Path"
+}
+
 # ------------------------------------------------------------
 # Get-RemediationHint -Label "<step label>"
 # ------------------------------------------------------------
@@ -1028,6 +1038,161 @@ if ($FailedSteps.Count -gt 0) {
     Write-Host "==========================================="
     Write-Host ""
 }
+
+Write-Host "==========================================="
+Write-Host "  Authenticating services"
+Write-Host "==========================================="
+Write-Host ""
+
+# Bypass entire auth section in CI / non-interactive modes
+if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless") {
+    Write-Host "  (Skipped -- non-interactive run.)"
+    Write-Host ""
+} else {
+    # ---- Claude auth ----
+    Write-Host "[1/3] Claude Code"
+    if ($env:ANTHROPIC_API_KEY) {
+        Write-Host "      ANTHROPIC_API_KEY set -- using API key, skipping OAuth."
+    } else {
+        $claudeStatus = claude auth status --json 2>$null
+        if ($claudeStatus -match '"loggedIn"\s*:\s*true') {
+            $emailMatch = [regex]::Match($claudeStatus, '"email"\s*:\s*"([^"]+)"')
+            $email = if ($emailMatch.Success) { $emailMatch.Groups[1].Value } else { "unknown" }
+            Write-Host "      [OK] Already logged in as $email"
+        } else {
+            Write-Host "      Not logged in. A browser will open so you can sign in."
+            Write-Host "      [Y]es / [s]kip+continue without Claude / [q]uit script"
+            $answer = Read-Host "      >"
+            if ([string]::IsNullOrWhiteSpace($answer)) { $answer = "Y" }
+            switch -Regex ($answer) {
+                "^[Yy]" {
+                    claude auth login --claudeai
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Host "      [FAIL] Login didn't complete. Re-run when ready:  .\setup-windows.ps1"
+                        exit 1
+                    }
+                    $recheck = claude auth status --json 2>$null
+                    if ($recheck -notmatch '"loggedIn"\s*:\s*true') {
+                        Write-Host "      [FAIL] Login flow returned but auth status still shows not logged in."
+                        Write-Host "             Run manually:  claude auth login --claudeai"
+                        exit 1
+                    }
+                    Write-Host "      [OK] Logged in."
+                }
+                "^[Ss]" {
+                    Write-Host ""
+                    Write-Host "  +============================================================+"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  |   You skipped Claude Code login.                           |"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  |   That's fine - but Phase 2 (where Claude finishes setup)  |"
+                    Write-Host "  |   needs an authenticated session, so we can't continue     |"
+                    Write-Host "  |   right now.                                               |"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  |   When you're ready:                                       |"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  |     cd `$env:USERPROFILE\Documents\elnora-starter-kit       |"
+                    Write-Host "  |     .\setup-windows.ps1                                    |"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  |   Re-running is safe - installs are skipped if already     |"
+                    Write-Host "  |   present, and the script picks up at the auth step.       |"
+                    Write-Host "  |                                                            |"
+                    Write-Host "  +============================================================+"
+                    Write-Host ""
+                    exit 0
+                }
+                "^[Qq]" {
+                    Write-Host "      Quit. Re-run anytime:  .\setup-windows.ps1"
+                    exit 0
+                }
+                default {
+                    Write-Host "      Unrecognized response, treating as skip."
+                    exit 0
+                }
+            }
+        }
+    }
+    Write-Host ""
+
+    # ---- GitHub auth ----
+    Write-Host "[2/3] GitHub CLI"
+    if ($env:GH_TOKEN -or $env:GITHUB_TOKEN) {
+        Write-Host "      GH_TOKEN/GITHUB_TOKEN set -- skipping OAuth."
+    } else {
+        gh auth status 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            $ghUser = (gh api user --jq .login 2>$null)
+            if ([string]::IsNullOrWhiteSpace($ghUser)) { $ghUser = "unknown" }
+            Write-Host "      [OK] Already logged in as $ghUser"
+        } else {
+            Write-Host "      Not logged in. Phase 2 needs this to create your starter repo."
+            Write-Host "      [Y]es / [s]kip (Phase 2 will prompt you again later)"
+            $answer = Read-Host "      >"
+            if ([string]::IsNullOrWhiteSpace($answer)) { $answer = "Y" }
+            switch -Regex ($answer) {
+                "^[Yy]" {
+                    gh auth login --web --hostname github.com --git-protocol https
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "      [OK] Logged in."
+                    } else {
+                        Write-Host "      [WARN] Login didn't complete. Phase 2 will prompt you."
+                    }
+                }
+                default {
+                    Write-Host "      [SKIP] To do later:  gh auth login --web"
+                }
+            }
+        }
+    }
+    Write-Host ""
+
+    # ---- Elnora auth ----
+    Write-Host "[3/3] Elnora CLI"
+    if ($env:ELNORA_API_KEY) {
+        Write-Host "      ELNORA_API_KEY set -- skipping prompt."
+    } else {
+        $elnoraStatus = elnora auth status 2>$null
+        if ($elnoraStatus -match '"authenticated"\s*:\s*true') {
+            Write-Host "      [OK] Already authenticated."
+        } else {
+            Write-Host "      Not authenticated. Elnora uses an API key (not browser OAuth)."
+            Write-Host "      Get one at:  https://app.elnora.ai/settings/api-keys"
+            Write-Host "      [P]aste key now / [s]kip (Elnora MCP will prompt on first use)"
+            $answer = Read-Host "      >"
+            if ([string]::IsNullOrWhiteSpace($answer)) { $answer = "s" }
+            switch -Regex ($answer) {
+                "^[Pp]" {
+                    $elnoraKey = Read-Host "      API key (starts with elnora_live_)"
+                    if (-not [string]::IsNullOrWhiteSpace($elnoraKey)) {
+                        elnora auth login --api-key $elnoraKey *>$null
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Host "      [OK] Saved."
+                        } else {
+                            Write-Host "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
+                        }
+                    } else {
+                        Write-Host "      [SKIP] Empty key -- skipped."
+                    }
+                }
+                default {
+                    Write-Host "      [SKIP] To do later:  elnora auth login --api-key <key>"
+                }
+            }
+        }
+    }
+    Write-Host ""
+}
+
+Write-Host "==========================================="
+Write-Host "  Quick PATH note"
+Write-Host "==========================================="
+Write-Host ""
+Write-Host "  The 'claude' and 'elnora' commands are at %USERPROFILE%\.local\bin\."
+Write-Host "  - In any terminal opened AFTER this install: works automatically."
+Write-Host "  - In a terminal opened BEFORE this install (rare):"
+Write-Host "      `$env:Path = `"`$env:USERPROFILE\.local\bin;`$env:Path`""
+Write-Host "    or just open a fresh PowerShell window."
+Write-Host ""
 
 Write-Host "==========================================="
 Write-Host "  Phase 1 complete - handing off to Claude"
