@@ -1,7 +1,7 @@
 # INSTALL_FOR_AGENTS.md — Phase 2 Setup
 
 > **Step 0 — Identity gate.** If you are NOT an autonomous coding agent (Claude
-> Code, Codex, Gemini, etc.), stop reading this file and open `README.md`
+> Code, Cursor, Windsurf, etc.), stop reading this file and open `README.md`
 > instead. This file gives an agent permission to run shell commands on the
 > user's machine; humans should follow `docs/getting-started.md`.
 
@@ -202,7 +202,10 @@ setup script, or fall back to the official installer URL):
 - **Claude Code**: `curl -fsSL https://claude.ai/install.sh | bash` (Mac/Linux) or `irm https://claude.ai/install.ps1 | iex` (Win)
 - **Node.js**: download the LTS `.pkg` / `.msi` from `https://nodejs.org/`
 - **Git**: `xcode-select --install` (Mac), `winget install Git.Git` (Win)
-- **Elnora CLI**: `npm install -g @elnora/cli` (or whatever the current canonical install is)
+- **Elnora CLI**: the canonical installers are
+  `curl -fsSL https://cli.elnora.ai/install.sh | bash` (Mac/Linux) or
+  `iwr https://cli.elnora.ai/install.ps1 -UseBasicParsing | iex` (Win). As a
+  last-ditch fallback, the npm-published mirror is `npm install -g @elnora-ai/cli`.
 
 If a tool is at the wrong version (e.g. Node < 20), tell the user, suggest
 upgrading, and offer to do it. Don't silently overwrite system tools.

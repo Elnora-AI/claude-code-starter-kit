@@ -86,13 +86,16 @@ vault synced via Google Drive, OneDrive, Dropbox, or stored locally).
 path and sub-directory layout in YAML frontmatter. This file is **gitignored**,
 so each user keeps their own copy.
 
+### First-run setup
+
 <!-- LOAD-BEARING MARKERS: do not rename without updating
      INSTALL_FOR_AGENTS.md's CLAUDE.md self-clean instructions.
      The strip code finds the literal headings `### First-run setup`
      (start anchor) and `### Reading the config` (end anchor) and
      deletes everything between them (inclusive of start, exclusive
-     of end). Renaming either heading silently breaks the strip. -->
-### First-run setup
+     of end). Renaming either heading silently breaks the strip.
+     This comment lives INSIDE the strip range so it is removed
+     along with the rest of the scaffolding on first run. -->
 
 This subsection is **self-destructing scaffolding** — it runs exactly once on
 a freshly-cloned starter kit, then deletes itself from this file. If you're

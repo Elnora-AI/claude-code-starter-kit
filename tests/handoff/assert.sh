@@ -50,7 +50,9 @@ if [ -f "$HOME/.elnora/profiles.toml" ]; then
         # The CLI writes 600 itself; warn but don't fail in case of umask quirks.
         echo "  ⚠ profiles.toml mode is $mode (expected 600 — CLI usually sets this)"
     fi
-    if grep -q '^api_key = "elnora_live_' "$HOME/.elnora/profiles.toml"; then
+    # Allow leading whitespace — TOML lets `api_key = ...` appear indented
+    # inside a [profile] table section, and the CLI is free to format that way.
+    if grep -qE '^[[:space:]]*api_key[[:space:]]*=[[:space:]]*"elnora_live_' "$HOME/.elnora/profiles.toml"; then
         ok "profiles.toml contains api_key = elnora_live_*"
     else
         fail "profiles.toml missing api_key = \"elnora_live_*\" line"

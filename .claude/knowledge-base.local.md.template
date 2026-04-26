@@ -24,7 +24,11 @@
 vault_path: <ABSOLUTE_PATH_TO_YOUR_VAULT>
 
 # Subdirectory inside the vault that holds your main workspace (optional).
-# Leave as-is or delete if you don't use a sub-directory structure.
+# Leave as-is or delete the line if you don't use a sub-directory structure.
+# Examples:
+#   company_dir: Acme-Lab           # one folder per company
+#   company_dir: 01-projects        # numbered top-level folders (PARA-style)
+#   company_dir: work/current       # nested path
 company_dir: <YOUR_WORKSPACE_SUBDIR>
 ---
 

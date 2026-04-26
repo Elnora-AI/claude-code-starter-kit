@@ -51,15 +51,16 @@ the kit means trusting `raw.githubusercontent.com/Elnora-AI/elnora-starter-kit`,
    `~/Documents/elnora-starter-kit/` and runs `setup-mac.sh` or
    `setup-windows.ps1`. Installs Claude Code, the Elnora CLI, Node.js, Git,
    Python, VS Code, GitHub CLI, and Obsidian. Existing installations are
-   detected and skipped. Output is written to `~/claude-starter-install.log`.
+   detected and skipped. Output is written to `~/claude-starter-install.log`
+   (macOS) or `%USERPROFILE%\claude-starter-install.log` (Windows).
 2. **Authenticate services.** The script signs you into three accounts
    sequentially before handing off to Claude:
    - **Claude Pro/Max** — browser OAuth (required to continue).
    - **GitHub CLI** — browser OAuth (skip allowed; Phase 2 will prompt
      again if needed).
    - **Elnora CLI** — paste your API key from
-     [app.elnora.ai/settings/api-keys](https://app.elnora.ai/settings/api-keys)
-     (skip allowed; the Elnora MCP will prompt on first use).
+     [platform.elnora.ai/settings](https://platform.elnora.ai/settings) → **API
+     Keys** tab (skip allowed; the Elnora MCP will prompt on first use).
 3. **Phase 2 — agent handoff (~3–5 min).** Claude follows
    [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md): verifies installed
    versions, **creates your private GitHub repo and pushes the starter
@@ -155,9 +156,9 @@ If the automated flow is unavailable (no Claude Pro/Max, install failure),
 Defaults enabled in `.claude/settings.json`:
 
 - `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — enables [multi-agent teams](https://code.claude.com/docs/en/agent-teams).
-- `env.CLAUDE_CODE_NO_FLICKER=1` — enables [full-screen mode](https://code.claude.com/docs/en/fullscreen).
+- `env.CLAUDE_CODE_NO_FLICKER=1` — opts into Claude Code's [full-screen alt-buffer renderer](https://code.claude.com/docs/en/fullscreen), which removes the per-keystroke flicker some terminals show during long sessions.
 - `autoUpdatesChannel: "latest"` — opts into the [auto-update](https://code.claude.com/docs/en/setup#auto-updates) `latest` channel (new features as soon as released). Switch to `"stable"` for ~1-week-old builds. Ignored for Homebrew/WinGet/apt/dnf/apk installs (upgrade via the package manager).
-- `remoteControlAtStartup: true` — auto-enables [Remote Control](https://code.claude.com/docs/en/remote-control) on every interactive session, so you can pick up any session from claude.ai/code or the Claude mobile app. Set to `false` to require an explicit `claude remote-control` / `--remote-control` / `/remote-control` invocation.
+- `remoteControlAtStartup: true` — auto-enables [Remote Control](https://code.claude.com/docs/en/remote-control) on every interactive session, so you can pick up any session from claude.ai/code or the Claude mobile app. Set to `false` to require an explicit `claude remote-control` / `--remote-control` / `/remote-control` invocation. **Heads-up:** Remote Control sessions are reachable from any device signed into your Claude account — review before enabling it on machines that handle proprietary data.
 
 Remove the line or set the value to `"0"` / `false` to disable.
 

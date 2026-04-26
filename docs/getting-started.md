@@ -135,18 +135,23 @@ fails" or "GitHub repo creation fails."
 ## Authenticate Elnora AI
 
 The setup script installs the Elnora CLI and pre-wires the hosted MCP server at
-`https://mcp.elnora.ai/mcp`. To authenticate once for every surface (CLI + MCP
-tools in Claude Code):
+`https://mcp.elnora.ai/mcp`. The CLI authenticates with an **API key** (not
+browser OAuth):
 
-```bash
-elnora auth login
-```
+1. Open <https://platform.elnora.ai/settings> and click the **API Keys** tab.
+2. Click **Create key** and copy the value (it starts with `elnora_live_`).
+3. Run:
 
-This opens a browser, completes OAuth, and caches credentials in `~/.elnora/`.
-Switch profiles later with `elnora auth profiles`.
+   ```bash
+   elnora auth login --api-key <paste-your-key-here>
+   ```
 
-If you haven't run `elnora auth login` and Claude Code needs an Elnora MCP tool,
-the first call opens a browser OAuth flow automatically — nothing to configure.
+The CLI writes the key to `~/.elnora/profiles.toml` (mode 600), and every new
+terminal stays authenticated. Switch profiles later with `elnora auth profiles`.
+
+If Claude Code calls an Elnora MCP tool before you've run the CLI login, the
+hosted MCP server itself prompts for the key on first use — but doing the CLI
+login once is the easiest way to authenticate every surface at once.
 
 ---
 

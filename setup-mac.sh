@@ -198,17 +198,20 @@ EOF
 # ------------------------------------------------------------
 # Runs a command with live output. On failure prints a structured FAILURE
 # box with the exit code, the exact command, the last 10 lines of captured
-# stderr, and a step-specific remediation hint.
+# output, and a step-specific remediation hint.
 #
-# Stream-splitting: the `{ ... } 3>&1` + tee trick lets us capture stderr
-# (for post-failure quoting) while still streaming stdout AND stderr live
-# to the terminal. PIPESTATUS[0] preserves the command's exit code through
-# the pipe (otherwise we'd get tee's exit code, which is always 0).
+# Stream handling: we merge stderr into stdout, then tee the merged stream
+# both to the capture file AND to fd 3 (the original stdout, i.e. the
+# terminal). That way the failure box quotes whatever the command actually
+# printed — important because brew, npm, curl, etc. emit their error
+# messages on stdout, not stderr, so capturing stderr alone left the box
+# empty for the most common failures. PIPESTATUS[0] preserves the command's
+# exit code through the pipe (otherwise we'd get tee's exit code, always 0).
 run_step() {
     local label="$1"; shift
     local errfile code
     errfile="$(mktemp 2>/dev/null)" || errfile="/tmp/claude-setup-err.$$"
-    { "$@" 2>&1 >&3 | tee "$errfile" >&2; code=${PIPESTATUS[0]}; } 3>&1
+    { "$@" 2>&1 | tee "$errfile" >&3; code=${PIPESTATUS[0]}; } 3>&1
     if [ "$code" -eq 0 ]; then
         rm -f "$errfile"
         return 0
@@ -219,7 +222,7 @@ run_step() {
     echo "  | Command:   $*" >&2
     if [ -s "$errfile" ]; then
         echo "  |" >&2
-        echo "  | Captured stderr (last 10 lines):" >&2
+        echo "  | Captured output (last 10 lines):" >&2
         tail -n 10 "$errfile" 2>/dev/null | sed 's/^/  |   /' >&2
     fi
     echo "  |" >&2
@@ -440,28 +443,19 @@ if command -v node &> /dev/null; then
 fi
 if ! $node_major_ok; then
     echo "[4/10] Installing Node.js 22 LTS..."
-    # Suppress the ~200-line brew caveats dump (the "node@22 was installed but
-    # not linked because node@20 is already linked" warning + a wall of
-    # "==> Caveats" sections from node@22's dependency chain). The next line
-    # always runs `brew link --force --overwrite node@22`, which resolves the
-    # "not linked" condition - so the caveats are obsolete by the time the
-    # user reads them, and they read like a scary failure to a beginner.
-    # Capture brew's output to a tempfile and only echo it on failure;
-    # on success print a one-line confirmation. Keeps the success path
-    # quiet while preserving full diagnostic output when something breaks.
-    node_install_log="$(mktemp 2>/dev/null)" || node_install_log="/tmp/claude-setup-node.$$"
-    if run_step "Node.js" /bin/bash -c "brew install node@22 >\"$node_install_log\" 2>&1"; then
+    # Suppress brew's post-install hints (the "==> Caveats" wall and the
+    # "node@22 was installed but not linked..." warning). The next line
+    # always runs `brew link --force --overwrite node@22`, which resolves
+    # the "not linked" condition - so those caveats are obsolete by the
+    # time the user reads them, and they read like a scary failure to a
+    # beginner. HOMEBREW_NO_ENV_HINTS=1 trims them down without hiding
+    # genuine error output, so run_step's capture still has something
+    # meaningful to quote in the FAILURE box if the install fails.
+    if HOMEBREW_NO_ENV_HINTS=1 run_step "Node.js" brew install node@22; then
         brew link --force --overwrite node@22 &>/dev/null || true
         hash -r 2>/dev/null || true
         echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed - restart terminal')"
-    else
-        # On failure, surface the captured output so the FAILURE box has
-        # something to point at.
-        if [ -s "$node_install_log" ]; then
-            sed 's/^/    /' "$node_install_log" >&2
-        fi
     fi
-    rm -f "$node_install_log"
 else
     echo "[4/10] Node.js already installed: $(node --version). Skipping."
 fi

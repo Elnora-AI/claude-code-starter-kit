@@ -36,7 +36,19 @@ else
 
     if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
         mkdir -p "$(dirname "$TARGET_DIR")"
-        mv "$TMP_DIR/$REPO_NAME-$BRANCH" "$TARGET_DIR"
+        # GitHub's tarball extracts to "<repo>-<branch>". Verify that path
+        # exists before moving — protects against branch names that contain
+        # slashes (GitHub rewrites '/' to '-' inside the archive but $BRANCH
+        # would still carry the slash) and against silent tar failures
+        # mid-pipe that don't trip curl's exit code. install.ps1 already
+        # has the equivalent check; parity matters.
+        EXTRACTED="$TMP_DIR/$REPO_NAME-$BRANCH"
+        if [ ! -d "$EXTRACTED" ]; then
+            echo "[!] Expected extracted folder not found: $EXTRACTED" >&2
+            echo "    The tarball may have changed shape, or tar failed silently." >&2
+            exit 1
+        fi
+        mv "$EXTRACTED" "$TARGET_DIR"
         echo "Extracted to $TARGET_DIR"
     else
         echo "[!] Failed to download starter kit from $TARBALL_URL" >&2

@@ -34,7 +34,14 @@ function Assert-Fail {
     [void]$script:FailMsgs.Add($Msg)
 }
 
-Set-Location $RepoDir
+# Pre-check the repo dir before Set-Location so a missing path produces a
+# clean structured failure instead of an opaque cmdlet exception. Mirrors
+# `assert.sh`'s `cd "$REPO_DIR" || { echo FATAL; exit 2; }` pattern.
+if (-not (Test-Path -LiteralPath $RepoDir)) {
+    Write-Host "FATAL: cannot cd to $RepoDir (directory does not exist)" -ForegroundColor Red
+    exit 2
+}
+Set-Location -LiteralPath $RepoDir
 
 Write-Host "==========================================="
 Write-Host "  Handoff E2E assertions"
@@ -52,7 +59,9 @@ $profilesPath = Join-Path $env:USERPROFILE ".elnora\profiles.toml"
 if (Test-Path $profilesPath) {
     Assert-Ok "$profilesPath exists"
     $profilesContent = Get-Content $profilesPath -Raw
-    if ($profilesContent -match '(?m)^api_key = "elnora_live_') {
+    # Allow leading whitespace — TOML lets `api_key = ...` appear indented
+    # inside a [profile] table section, and the CLI is free to format that way.
+    if ($profilesContent -match '(?m)^\s*api_key\s*=\s*"elnora_live_') {
         Assert-Ok "profiles.toml contains api_key = elnora_live_*"
     } else {
         Assert-Fail "profiles.toml missing api_key = `"elnora_live_*`" line"
@@ -96,15 +105,20 @@ if (Test-Path .git) {
     }
     # Two branches based on whether the workflow provisioned a PAT and
     # asked the agent to do the GitHub bootstrap.
-    $remotes = git -C $RepoDir remote 2>$null
-    $remoteCount = if ($remotes) { ($remotes | Measure-Object -Line).Lines } else { 0 }
+    # `git remote` returns one remote per line. PowerShell's native command
+    # capture turns a single-line result into a bare string (no trailing
+    # newline) — and `Measure-Object -Line` on that returns 0, not 1, because
+    # it counts newline-terminated lines. Split + filter empties so the count
+    # is right whether there are 0, 1, or many remotes.
+    $remoteList = @($remotes -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $remoteCount = $remoteList.Count
     if ($env:ELNORA_HANDOFF_REPO_NAME) {
         # PAT path — expect exactly one remote 'origin' pointing at the
         # CI-named repo, with HEAD == origin/main and visibility = PRIVATE.
-        if ($remoteCount -eq 1 -and $remotes -eq "origin") {
+        if ($remoteCount -eq 1 -and $remoteList[0] -eq "origin") {
             Assert-Ok "exactly one remote 'origin' configured"
         } else {
-            Assert-Fail "expected exactly one remote 'origin', found ${remoteCount}: $($remotes -join ' ')"
+            Assert-Fail "expected exactly one remote 'origin', found ${remoteCount}: $($remoteList -join ' ')"
         }
         $originUrl = git -C $RepoDir remote get-url origin 2>$null
         if (-not $originUrl) { $originUrl = "" }
@@ -134,7 +148,7 @@ if (Test-Path .git) {
         if ($remoteCount -eq 0) {
             Assert-Ok "no git remotes configured (expected — GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
         } else {
-            Assert-Fail "expected 0 remotes (no PAT provisioned), found ${remoteCount}: $($remotes -join ' ')"
+            Assert-Fail "expected 0 remotes (no PAT provisioned), found ${remoteCount}: $($remoteList -join ' ')"
         }
     }
     $global:LASTEXITCODE = 0

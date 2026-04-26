@@ -1,8 +1,9 @@
 # RECOVERY.md — Common Failures and Fixes
 
 If something went wrong during install, find your symptom below. Each fix
-takes 1–5 minutes. If your problem isn't listed, ask Claude or email
-`~/claude-starter-install.log` to whoever is supporting you.
+takes 1–5 minutes. If your problem isn't listed, ask Claude or share
+`~/claude-starter-install.log` (macOS) / `%USERPROFILE%\claude-starter-install.log`
+(Windows) with whoever is supporting you.
 
 ---
 

@@ -37,23 +37,17 @@ These marketplaces are configured in `.claude/settings.json`. Browse them with `
 
 ## MCP Servers
 
-Provided automatically by enabled plugins:
-
-| MCP Server | Source Plugin | What it provides |
-|-----------|---------------|------------------|
-| **context7** | context7 | `query-docs`, `resolve-library-id` — fetch current library/framework documentation |
-
-(Other plugins like `playwright` provide their own MCP servers, but they're
-not enabled by default — install via `/plugins` if you need them.)
-
-Wired directly via `.mcp.json` (project-scoped, not plugin-provided):
+Wired directly via `.mcp.json` (project-scoped):
 
 | MCP Server | Endpoint | What it provides |
 |-----------|----------|------------------|
-| **context7** | `https://mcp.context7.com/mcp` | Same as above, available even without the plugin installed |
-| **grep** | `https://mcp.grep.app` | Semantic code search across public repos |
+| **context7** | `https://mcp.context7.com/mcp` | `query-docs`, `resolve-library-id` — fetch current library/framework documentation. Also surfaced through the `context7` plugin (same tools, same namespace), so you get it whether or not the plugin is enabled. |
+| **grep** | `https://mcp.grep.app` | Semantic code search across **public** GitHub repos. **Privacy note:** queries (and by extension your search terms) are sent to the third-party `grep.app` service. Don't use it for proprietary code or anything you wouldn't paste into a public search engine. |
 | **elnora** | `https://mcp.elnora.ai/mcp` | Elnora platform tools — bioprotocol generation, task/file/project management. OAuth 2.1 browser flow on first use (no manual config). |
 | **chrome-devtools** | `npx chrome-devtools-mcp@latest --autoConnect` | Take over your real Chrome via the Chrome DevTools Protocol — list tabs, navigate, screenshot, run JS, read network/console, run Lighthouse. Setup + recipes in [`docs/chrome-devtools-mcp-setup.md`](docs/chrome-devtools-mcp-setup.md). Requires Chrome 144+ running. Windows users: `setup-windows.ps1` writes a user-level override that wraps `npx` in `cmd /c`. |
+
+(Other plugins like `playwright` ship their own MCP servers, but they're
+not enabled by default — install via `/plugins` if you need them.)
 
 _Add project-specific MCP servers to `.mcp.json` as needed._
 
