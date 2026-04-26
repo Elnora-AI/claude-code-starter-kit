@@ -105,11 +105,18 @@ jobs:
         # specifically for this case — installs winget + dependencies even
         # when the Microsoft Store / App Installer isn't available.
         # https://learn.microsoft.com/en-us/windows/package-manager/winget/
+        #
+        # GitHub-hosted runners run PowerShell 7.4+, where Install-PSResource
+        # (Microsoft.PowerShell.PSResourceGet) is the supported install path.
+        # The legacy `Install-PackageProvider -Name NuGet` cmdlet is part of
+        # PowerShellGet 2.x's compat layer that PS 7 doesn't ship with by
+        # default — using it here fails with "No match was found for the
+        # specified search criteria for the provider 'NuGet'".
         shell: pwsh
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          Install-PackageProvider -Name NuGet -Force -Scope CurrentUser -ErrorAction Stop | Out-Null
-          Install-Module -Name Microsoft.WinGet.Client -Force -Scope CurrentUser -Repository PSGallery -ErrorAction Stop
+          Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Reinstall
+          Import-Module Microsoft.WinGet.Client
           Repair-WinGetPackageManager -Latest -Force
           Write-Host "winget version: $(winget --version)"
 
