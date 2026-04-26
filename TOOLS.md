@@ -5,42 +5,18 @@ Update this file as you add or remove tools so Claude always knows what's availa
 
 ---
 
-## Installed Plugins
+## Enabled Plugins
 
-### From claude-code-plugins (Anthropic Official)
+These four plugins are turned on by default in `.claude/settings.json`. Everything
+else has to be installed via `/plugins` — see `marketplace-plugins.md` for the
+full catalog.
 
-| Plugin | What it provides |
-|--------|-----------------|
-| **commit-commands** | `/commit` and `/commit-push-pr` slash commands for Git workflow |
-| **feature-dev** | Guided feature development with codebase understanding |
-| **plugin-dev** | Tools for creating your own plugins |
-| **security-guidance** | Security best practices and vulnerability checks |
-
-### From claude-code-workflows (Community)
-
-| Plugin | What it provides |
-|--------|-----------------|
-| **security-compliance** | Security compliance auditing |
-| **security-scanning** | SAST, threat modeling, and security hardening |
-| **code-documentation** | Technical documentation and tutorial generation |
-| **business-analytics** | KPI dashboards and data storytelling |
-| **hr-legal-compliance** | HR, legal docs, and GDPR compliance |
-
-### From claude-plugins-official (Anthropic Extras)
-
-| Plugin | What it provides |
-|--------|-----------------|
-| **claude-md-management** | Audit and improve CLAUDE.md files |
-| **superpowers** | Planning, brainstorming, TDD, systematic debugging, subagent-driven development skills |
-| **context7** | Fetch up-to-date library/framework documentation via MCP |
-| **playwright** | Browser automation and web testing via MCP |
-| **claude-code-setup** | Analyze a codebase and recommend hooks, subagents, skills, plugins, MCP servers |
-
-### From anthropic-agent-skills (Document Processing)
-
-| Plugin | What it provides |
-|--------|-----------------|
-| **document-skills** | `/pdf`, `/docx`, `/xlsx`, `/pptx` — read and create office documents |
+| Plugin | Marketplace | What it provides |
+|--------|-------------|------------------|
+| **commit-commands** | claude-code-plugins | `/commit` and `/commit-push-pr` slash commands for Git workflow |
+| **claude-md-management** | claude-plugins-official | Audit and improve CLAUDE.md files |
+| **context7** | claude-plugins-official | Fetch up-to-date library/framework documentation via MCP |
+| **elnora** | elnora-plugins | 8 bioprotocol skills (`elnora-platform`, `-orgs`, `-projects`, `-tasks`, `-files`, `-folders`, `-search`, `-admin`) wired to the Elnora MCP server |
 
 ---
 
@@ -61,12 +37,14 @@ These marketplaces are configured in `.claude/settings.json`. Browse them with `
 
 ## MCP Servers
 
-Provided automatically by installed plugins:
+Provided automatically by enabled plugins:
 
 | MCP Server | Source Plugin | What it provides |
 |-----------|---------------|------------------|
 | **context7** | context7 | `query-docs`, `resolve-library-id` — fetch current library/framework documentation |
-| **playwright** | playwright | Full browser automation suite (navigate, click, type, screenshot, network, console) |
+
+(Other plugins like `playwright` provide their own MCP servers, but they're
+not enabled by default — install via `/plugins` if you need them.)
 
 Wired directly via `.mcp.json` (project-scoped, not plugin-provided):
 
@@ -89,7 +67,9 @@ Headline commands:
 
 | Command | What it does |
 |---------|-------------|
-| `elnora auth login` | OAuth browser login (caches credentials in `~/.elnora/`) |
+| `elnora auth login --api-key <key>` | Save an API key to `~/.elnora/profiles.toml` (mode 600). Every new shell stays authenticated. |
+| `elnora whoami` | Show current authenticated identity |
+| `elnora doctor` | Verify config, auth, and API connectivity in one shot |
 | `elnora setup-claude` | Post-auth helper — wires Elnora into your current Claude Code config |
 | `elnora tasks` | Create, list, update wet-lab tasks |
 | `elnora projects` | Project management |

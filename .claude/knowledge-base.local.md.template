@@ -10,11 +10,17 @@
 # ============================================================
 
 # Absolute path to your knowledge base root.
+# Use forward slashes on Windows too — they work everywhere and
+# avoid YAML escaping issues with backslashes.
 # Examples:
 #   macOS Obsidian local:   /Users/you/Obsidian/MyVault
-#   Google Drive (macOS):   /Users/you/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/vault
-#   OneDrive (macOS):       /Users/you/Library/CloudStorage/OneDrive-Personal/vault
-#   OneDrive (Windows):     C:/Users/you/OneDrive/vault
+#   macOS iCloud:           /Users/you/Library/Mobile Documents/com~apple~CloudDocs/MyVault
+#   macOS Google Drive:     /Users/you/Library/CloudStorage/GoogleDrive-you@example.com/My Drive/vault
+#   macOS OneDrive:         /Users/you/Library/CloudStorage/OneDrive-Personal/vault
+#   macOS Dropbox:          /Users/you/Library/CloudStorage/Dropbox/MyVault
+#   Windows local:          C:/Users/you/Documents/MyVault
+#   Windows OneDrive:       C:/Users/you/OneDrive/vault
+#   Windows Dropbox:        C:/Users/you/Dropbox/MyVault
 vault_path: <ABSOLUTE_PATH_TO_YOUR_VAULT>
 
 # Subdirectory inside the vault that holds your main workspace (optional).

@@ -14,12 +14,17 @@ Phase 2 work.
 
 After the headless handoff completes, `assert.sh` / `assert.ps1` verifies:
 
-1. `.env` was created with `ELNORA_API_KEY=elnora_live_…` and mode 600 (Mac).
+1. `~/.elnora/profiles.toml` (or `%USERPROFILE%\.elnora\profiles.toml`)
+   contains `api_key = "elnora_live_…"`, AND `elnora auth status` returns
+   success — i.e. Claude actually authenticated the CLI, not just dropped
+   a useless `.env` file the CLI doesn't read.
 2. `.git/` exists and `git remote get-url elnora-upstream` resolves.
 3. `.claude/knowledge-base.local.md` was created and the placeholder is gone.
 4. The `### First-run setup` block in `CLAUDE.md` was self-deleted.
 5. The transcript contains the `HANDOFF_COMPLETE` marker.
-6. The transcript shows Claude actually invoked the Elnora CLI.
+6. The transcript shows Claude ran an Elnora CLI auth/verification command
+   (`whoami`, `doctor`, `auth login`, or `auth status`) — not just
+   `elnora --version`.
 
 ## How to run it (manual only)
 
@@ -34,7 +39,7 @@ You need two API keys. Paste them into GitHub repo secrets:
 | Secret name | Where to get it | Notes |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys | Set a low monthly budget cap on the key in the Anthropic console so a runaway test can't spike the bill (~$1-3 per run on Sonnet). |
-| `ELNORA_API_KEY_TEST` | https://platform.elnora.ai/settings → API Keys | Use a **dedicated test account**, not your personal one. Every run hits `elnora auth whoami` and `elnora protocol list`. |
+| `ELNORA_API_KEY_TEST` | https://platform.elnora.ai/settings → API Keys | Use a **dedicated test account**, not your personal one. Every run hits `elnora whoami` and `elnora doctor`. |
 
 **For local testing** (running the headless mode on your own Mac), paste
 the same values into `.env` at the repo root — that file is gitignored.

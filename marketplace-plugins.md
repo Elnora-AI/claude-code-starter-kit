@@ -28,14 +28,15 @@ These marketplaces are already configured in your `.claude/settings.json`:
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
 | **commit-commands** ⭐ | `/commit` and `/commit-push-pr` commands | Everyone — makes Git easier |
-| **feature-dev** ⭐ | Guided feature development workflow | Developers building features |
-| **plugin-dev** ⭐ | Tools for creating your own plugins | Plugin developers |
-| **security-guidance** ⭐ | Security best practices and vulnerability checks | Everyone |
+| **feature-dev** | Guided feature development workflow | Developers building features |
+| **plugin-dev** | Tools for creating your own plugins | Plugin developers |
+| **security-guidance** | Security best practices and vulnerability checks | Everyone |
 | **pr-review-toolkit** | PR review with multiple specialized reviewers | Teams doing code reviews |
 | **code-review** | Code review command | Reviewing pull requests |
 | **hookify** | Create rules to prevent unwanted behaviors | Advanced users |
 
 ⭐ = enabled by default in this starter kit (see `.claude/settings.json`).
+The rest are available in this marketplace — install via `/plugins`.
 
 ### 2. Anthropic Skills (`anthropic-agent-skills`)
 
@@ -44,7 +45,7 @@ These marketplaces are already configured in your `.claude/settings.json`:
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
-| **document-skills** | Read/create PDFs, Word docs, Excel, PowerPoint, and more | **Everyone — install this first** |
+| **document-skills** | Read/create PDFs, Word docs, Excel, PowerPoint, and more | Recommended first install — not enabled by default, install via `/plugins` |
 
 What `document-skills` adds:
 - `/pdf` — Extract text from PDFs, create new PDFs, merge/split documents
@@ -60,14 +61,15 @@ What `document-skills` adds:
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
 | **claude-md-management** ⭐ | Audit and improve CLAUDE.md files | Everyone |
-| **superpowers** ⭐ | Planning, brainstorming, TDD, systematic debugging skills | Power users |
 | **context7** ⭐ | MCP-backed library/framework docs fetcher | Developers |
-| **playwright** ⭐ | Browser automation and web testing | Anyone testing web apps |
-| **claude-code-setup** ⭐ | Analyze a codebase and recommend automations | New projects |
+| **superpowers** | Planning, brainstorming, TDD, systematic debugging skills | Power users |
+| **playwright** | Browser automation and web testing | Anyone testing web apps |
+| **claude-code-setup** | Analyze a codebase and recommend automations | New projects |
 | **stripe** | Stripe payment integration helpers | Finance / billing teams |
 | **frontend-design** | Production-quality UI/web design | Designers and frontend devs |
 
 ⭐ = enabled by default in this starter kit.
+The rest are available in this marketplace — install via `/plugins`.
 
 ### 4. Knowledge Work (`knowledge-work-plugins`)
 
@@ -118,17 +120,17 @@ If new plugins are added to the `elnora-plugins` marketplace later, enable them 
 
 **Source**: github.com/wshobson/agents
 **Trust level**: Medium — community-maintained, not Anthropic-verified
-**Status**: Configured. 5 plugins enabled by default.
+**Status**: Configured. **No plugins enabled by default** — browse and install what you need via `/plugins`.
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
-| **security-compliance** ⭐ | Security compliance auditing | Regulated environments |
-| **security-scanning** ⭐ | SAST, threat modeling, security hardening | Everyone |
-| **code-documentation** ⭐ | Technical documentation and tutorial generation | Developers |
-| **business-analytics** ⭐ | KPI dashboards and data storytelling | Ops / analytics |
-| **hr-legal-compliance** ⭐ | HR, legal docs, and GDPR compliance | HR / legal |
+| **security-compliance** | Security compliance auditing | Regulated environments |
+| **security-scanning** | SAST, threat modeling, security hardening | Everyone |
+| **code-documentation** | Technical documentation and tutorial generation | Developers |
+| **business-analytics** | KPI dashboards and data storytelling | Ops / analytics |
+| **hr-legal-compliance** | HR, legal docs, and GDPR compliance | HR / legal |
 
-⭐ = enabled by default. The marketplace has 15+ plugins total; browse the rest via `/plugins`.
+The marketplace has 15+ plugins total; browse the rest via `/plugins`.
 
 ---
 
