@@ -67,11 +67,13 @@ jobs:
       # the agent runs `gh auth login` — we want the test to exercise
       # the explicit auth path.
       ELNORA_HANDOFF_GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
-      # Deterministic per-run repo name: github.run_id is a monotonic
-      # numeric ID assigned by GitHub Actions, so it's collision-free
-      # across reruns and safe to interpolate into shell (no injection
-      # surface — it's not user-controlled).
-      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      # Deterministic per-run, per-OS repo name: github.run_id is a
+      # monotonic numeric ID assigned by GitHub Actions, so it's
+      # collision-free across reruns and safe to interpolate into shell
+      # (no injection surface — it's not user-controlled). The `-macos`
+      # / `-windows` suffix prevents the two jobs racing to create the
+      # same repo on the same test account.
+      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}-macos
       # Pin to bypass the Elnora installer's api.github.com call for "latest
       # release". CI runner IP pools routinely exhaust the unauthenticated
       # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
@@ -227,10 +229,9 @@ jobs:
       ELNORA_HANDOFF_MODE: headless
       # See macOS job for why this exists and why it's NOT named GH_TOKEN.
       ELNORA_HANDOFF_GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
-      # Deterministic per-run repo name. github.run_id is a numeric ID
-      # assigned by GitHub Actions — collision-free across reruns and
-      # safe to interpolate (not user-controlled).
-      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      # See macOS job for the rationale on why repo name includes the
+      # OS suffix — the two jobs would otherwise race for the same name.
+      ELNORA_HANDOFF_REPO_NAME: elnora-handoff-ci-${{ github.run_id }}-${{ github.run_attempt }}-windows
       # Pin to bypass the Elnora installer's api.github.com call for "latest
       # release". CI runner IP pools routinely exhaust the unauthenticated
       # 60/hr rate limit, which makes Phase 1 flaky on infra we don't own.
