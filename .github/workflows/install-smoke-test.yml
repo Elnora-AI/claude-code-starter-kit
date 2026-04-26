@@ -14,9 +14,16 @@ name: install-smoke-test
 #   - Neither windows-2022 nor windows-2025 runners include winget by default
 #     (they ship Chocolatey instead — winget runs on App Installer, a Microsoft
 #     Store package only available on Win10/11 consumer SKUs, not Windows
-#     Server). Real Win10/11 attendees have winget pre-installed. To test the
-#     winget paths in CI we install winget via the Cyberboss/install-winget
-#     action (pinned by SHA) before invoking setup-windows.ps1.
+#     Server). Real Win10/11 attendees have winget pre-installed. We tried
+#     installing winget on the runner via the Cyberboss/install-winget action
+#     but its action.yml has invalid expression syntax (double-quoted strings
+#     where GitHub Actions requires single quotes), and the repo is archived
+#     so that won't be fixed. Instead, we set ELNORA_SKIP_OPTIONAL_INSTALLS=1
+#     which makes setup-windows.ps1 skip the two truly optional winget steps
+#     (VS Code, Obsidian). The smoke test still validates the core path:
+#     Claude Code install, Elnora CLI install, Group Policy WindowsApps PATH
+#     fallback, the FAILURE-grep gate. Test winget paths via Option C (real
+#     Windows VM) when needed.
 #   - Shared CI runner IP pools routinely exhaust the GitHub API's 60/hour
 #     unauthenticated rate limit. setup-mac.sh and setup-windows.ps1 work
 #     around this by pinning the Elnora CLI version, which bypasses the
@@ -95,16 +102,14 @@ jobs:
           git config --global user.name "CI Smoke Test"
           git config --global user.email "ci@elnora-starter-kit.test"
 
-      - name: Install winget (not pre-installed on windows-* runners)
-        # Pinned by SHA (v1.2.0) for security; bump SHA when upgrading.
-        # Action source audited: composite action that uses Microsoft's
-        # documented Add-AppxPackage flow to install winget on Windows Server.
-        uses: Cyberboss/install-winget@fc922bc7e0adb16f39ceab057cb2af88bd3799e1
-
       - name: Run setup-windows.ps1 with handoff skipped
         shell: pwsh
         env:
           ELNORA_SKIP_HANDOFF: "1"
+          # Skip VS Code and Obsidian — both require winget which Windows
+          # Server runners don't have. See workflow header comment for why
+          # we don't install winget on the runner.
+          ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           .\setup-windows.ps1

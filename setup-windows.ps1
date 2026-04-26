@@ -624,7 +624,15 @@ $codePaths = @(
     "${env:ProgramFiles(x86)}\Microsoft VS Code\Code.exe"
 )
 $codeInstalled = (Get-Command code -ErrorAction SilentlyContinue) -or ($codePaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
-if (-not $codeInstalled) {
+if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+    # CI/test escape hatch: skip optional editor on environments where winget
+    # isn't available (windows-2022/2025 GitHub Actions runners). Used by
+    # .github/workflows/install-smoke-test.yml so the smoke test validates
+    # the core path (Claude Code + Elnora CLI + Group Policy fallback)
+    # without false-positive FAILUREs for components that need winget on a
+    # Server SKU. Real Win10/11 attendees never set this variable.
+    Write-Host "[6/9] VS Code: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run." -ForegroundColor Gray
+} elseif (-not $codeInstalled) {
     Write-Host "[6/9] Installing VS Code..." -ForegroundColor Green
     Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
@@ -681,7 +689,10 @@ if (-not $obsidianInstalled -and $hasWinget) {
     $wingetHas = winget list --id Obsidian.Obsidian --exact 2>$null | Select-String "Obsidian.Obsidian"
     if ($wingetHas) { $obsidianInstalled = $true }
 }
-if (-not $obsidianInstalled) {
+if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+    # See matching comment on the VS Code step above.
+    Write-Host "[8/9] Obsidian: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run." -ForegroundColor Gray
+} elseif (-not $obsidianInstalled) {
     Write-Host "[8/9] Installing Obsidian (optional)..." -ForegroundColor Green
     Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
