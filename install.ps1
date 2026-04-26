@@ -10,6 +10,14 @@
 
 $ErrorActionPreference = "Stop"
 
+# Force TLS 1.2 for the Invoke-WebRequest below. Windows PowerShell 5.1 (the
+# default on Win10/11) defaults to SSL3/TLS 1.0 on older unpatched builds;
+# GitHub's CDN (codeload.github.com) rejects that handshake and the zip
+# download fails with an opaque "underlying connection was closed" error
+# before we reach setup-windows.ps1. Mirrors the same fix that setup-windows.ps1
+# applies to its installer sub-processes.
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $RepoOwner = "Elnora-AI"
 $RepoName  = "elnora-starter-kit"
 $Branch    = "main"
