@@ -20,6 +20,12 @@
 # NOTE: deliberately NOT using `set -e` so one failure does not abort the rest.
 set -u
 
+# Self-defense: ensure user-local bin is on PATH from line 1.
+# This makes the script work even when re-run from a terminal that was
+# opened before any prior install (where ~/.local/bin isn't yet in the
+# inherited PATH). Idempotent — no harm if the dir doesn't exist yet.
+export PATH="$HOME/.local/bin:$PATH"
+
 # Default-on logging. Tee everything (stdout + stderr) to a log file in $HOME.
 # Overwrites on each run - re-runs are idempotent, so keeping old logs around
 # isn't useful. Users hitting problems can paste the file path in support chats.
@@ -750,6 +756,151 @@ printf "%s  |   If you ran this in Terminal.app, just open a new window. |%s\n" 
 printf "%s  |                                                            |%s\n" "$YELLOW" "$Y_NC"
 printf "%s  +============================================================+%s\n" "$YELLOW" "$Y_NC"
 echo ""
+echo ""
+
+echo "==========================================="
+echo "  Authenticating services"
+echo "==========================================="
+echo ""
+
+# Bypass entire auth section in CI / non-interactive modes.
+if [ "${ELNORA_SKIP_HANDOFF:-}" = "1" ] || [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
+    echo "  (Skipped — non-interactive run.)"
+    echo ""
+else
+    # ---- Claude auth ----
+    echo "[1/3] Claude Code"
+    if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+        echo "      ANTHROPIC_API_KEY set — using API key, skipping OAuth."
+    elif claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
+        email=$(claude auth status --json 2>/dev/null | grep -o '"email"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
+        echo "      ✓ Already logged in as ${email:-unknown}"
+    else
+        echo "      Not logged in. A browser will open so you can sign in."
+        echo "      [Y]es / [s]kip+continue without Claude / [q]uit script"
+        printf "      > "
+        read -r answer
+        case "${answer:-Y}" in
+            [Yy]*|"")
+                if claude auth login --claudeai; then
+                    if claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
+                        echo "      ✓ Logged in."
+                    else
+                        echo "      ✗ Login flow returned but auth status still shows not logged in."
+                        echo "         Run manually:  claude auth login --claudeai"
+                        exit 1
+                    fi
+                else
+                    echo "      ✗ Login didn't complete. Re-run when ready:  bash setup-mac.sh"
+                    exit 1
+                fi
+                ;;
+            [Ss]*)
+                cat <<'EOF'
+
+  +============================================================+
+  |                                                            |
+  |   You skipped Claude Code login.                           |
+  |                                                            |
+  |   That's fine — but Phase 2 (where Claude finishes setup)  |
+  |   needs an authenticated session, so we can't continue     |
+  |   right now.                                               |
+  |                                                            |
+  |   When you're ready:                                       |
+  |                                                            |
+  |     cd ~/Documents/elnora-starter-kit                      |
+  |     bash setup-mac.sh                                      |
+  |                                                            |
+  |   Re-running is safe — installs are skipped if already     |
+  |   present, and the script picks up at the auth step.       |
+  |                                                            |
+  +============================================================+
+
+EOF
+                exit 0
+                ;;
+            [Qq]*)
+                echo "      Quit. Re-run anytime:  bash setup-mac.sh"
+                exit 0
+                ;;
+            *)
+                echo "      Unrecognized response, treating as skip."
+                exit 0
+                ;;
+        esac
+    fi
+    echo ""
+
+    # ---- GitHub auth ----
+    echo "[2/3] GitHub CLI"
+    if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
+        echo "      GH_TOKEN/GITHUB_TOKEN set — skipping OAuth."
+    elif gh auth status >/dev/null 2>&1; then
+        gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
+        echo "      ✓ Already logged in as $gh_user"
+    else
+        echo "      Not logged in. Phase 2 needs this to create your starter repo."
+        echo "      [Y]es / [s]kip (Phase 2 will prompt you again later)"
+        printf "      > "
+        read -r answer
+        case "${answer:-Y}" in
+            [Yy]*|"")
+                if gh auth login --web --hostname github.com --git-protocol https; then
+                    echo "      ✓ Logged in."
+                else
+                    echo "      ⚠ Login didn't complete. Phase 2 will prompt you."
+                fi
+                ;;
+            *)
+                echo "      ⊘ Skipped. To do later:  gh auth login --web"
+                ;;
+        esac
+    fi
+    echo ""
+
+    # ---- Elnora auth ----
+    echo "[3/3] Elnora CLI"
+    if [ -n "${ELNORA_API_KEY:-}" ]; then
+        echo "      ELNORA_API_KEY set — skipping prompt."
+    elif elnora auth status 2>/dev/null | grep -q '"authenticated"[[:space:]]*:[[:space:]]*true'; then
+        echo "      ✓ Already authenticated."
+    else
+        echo "      Not authenticated. Elnora uses an API key (not browser OAuth)."
+        echo "      Get one at:  https://app.elnora.ai/settings/api-keys"
+        echo "      [P]aste key now / [s]kip (Elnora MCP will prompt on first use)"
+        printf "      > "
+        read -r answer
+        case "${answer:-s}" in
+            [Pp]*)
+                printf "      API key (starts with elnora_live_): "
+                read -r elnora_key
+                if [ -n "$elnora_key" ]; then
+                    if elnora auth login --api-key "$elnora_key" >/dev/null 2>&1; then
+                        echo "      ✓ Saved."
+                    else
+                        echo "      ✗ Login failed. Try manually:  elnora auth login --api-key <key>"
+                    fi
+                else
+                    echo "      ⊘ Empty key — skipped."
+                fi
+                ;;
+            *)
+                echo "      ⊘ Skipped. To do later:  elnora auth login --api-key <key>"
+                ;;
+        esac
+    fi
+    echo ""
+fi
+
+echo "==========================================="
+echo "  Quick PATH note"
+echo "==========================================="
+echo ""
+echo "  The 'claude' and 'elnora' commands are at ~/.local/bin/."
+echo "  • In any terminal opened AFTER this install: works automatically."
+echo "  • In a terminal opened BEFORE this install (rare):"
+echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
+echo "    or just open a fresh terminal window."
 echo ""
 
 echo "==========================================="
