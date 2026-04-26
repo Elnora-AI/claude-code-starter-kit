@@ -92,8 +92,10 @@ Set-Location $TargetDir
 # fire on the official Elnora-AI/elnora-starter-kit repo. Both ride along in the
 # zip and would just clutter the customer's directory. -ErrorAction
 # SilentlyContinue keeps this idempotent on re-runs after the dirs are gone.
+Write-Host "Stripping dev/CI scaffolding (tests/, .github/)..." -ForegroundColor Cyan
 Remove-Item -Path (Join-Path $TargetDir "tests")   -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path (Join-Path $TargetDir ".github") -Recurse -Force -ErrorAction SilentlyContinue
+Write-Host "  Done." -ForegroundColor Gray
 
 # Bypass execution policy for this process only so setup-windows.ps1 runs
 # without requiring the user to set it manually (as the older flow did).

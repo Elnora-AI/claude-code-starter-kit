@@ -53,7 +53,9 @@ cd "$TARGET_DIR"
 # fire on the official Elnora-AI/elnora-starter-kit repo. Both ride along in the
 # tarball and would just clutter the customer's directory. rm -rf is idempotent
 # so this is safe on both fresh and re-run installs.
+echo "Stripping dev/CI scaffolding (tests/, .github/)..."
 rm -rf "$TARGET_DIR/tests" "$TARGET_DIR/.github"
+echo "  Done."
 
 chmod +x setup-mac.sh
 echo ""

@@ -35,10 +35,10 @@ mode, follow these adjustments:
   `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
   Windows). Auto-detect it, write `.claude/knowledge-base.local.md`, AND
   **then edit `CLAUDE.md` to delete the entire `### First-run setup`
-  subsection** (heading + every line through the end of "step 5" of that
-  block). The self-clean is REQUIRED — it's step 5 of CLAUDE.md's First-run
-  setup, and skipping it leaves scaffolding in the production CLAUDE.md
-  forever. If you don't find a vault, skip the whole step.
+  subsection** using the anchor-pair strip described below. The self-clean
+  is REQUIRED — it's step 5 of CLAUDE.md's First-run setup, and skipping
+  it leaves scaffolding in the production CLAUDE.md forever. If you don't
+  find a vault, skip the whole step.
   - **Sensitive-paths shortcut.** When writing
     `.claude/knowledge-base.local.md`, the `Write` and `Edit` tools (and
     `Bash` heredoc constructions like `cat > ... << 'EOF'`) are blocked
@@ -48,6 +48,42 @@ mode, follow these adjustments:
     write directly with a single `Bash` call to
     `python3 -c "open('.claude/knowledge-base.local.md','w').write('''<contents>''')"`
     (or PowerShell `Set-Content` on Windows) and move on.
+  - **CLAUDE.md self-clean — anchor-pair strip (do this, not regex).**
+    The First-run setup block in `CLAUDE.md` is bounded by two
+    load-bearing heading lines: `### First-run setup` (start anchor) and
+    `### Reading the config` (end anchor). Strip the block by finding
+    those literal lines and splicing them out — do **not** use a regex
+    with a positive lookahead, because if either heading drifts the
+    regex silently fails and leaves scaffolding in production. Use a
+    line-based search-and-splice instead. A single `Bash` call works
+    (same `python3 -c "..."` pattern as the sensitive-paths shortcut
+    above):
+
+    ```
+    python3 -c "
+    import sys
+    p = 'CLAUDE.md'
+    lines = open(p).read().splitlines(keepends=True)
+    start = end = None
+    for n, line in enumerate(lines):
+        if line.rstrip() == '### First-run setup' and start is None:
+            start = n
+        elif line.rstrip() == '### Reading the config' and end is None:
+            end = n
+    if start is None or end is None or end <= start:
+        sys.stderr.write('CLAUDE.md self-clean FAILED: anchors missing or out of order ' + repr((start, end)) + '\n')
+        sys.exit(1)
+    open(p, 'w').writelines(lines[:start] + lines[end:])
+    "
+    ```
+
+    The strip deletes everything from the `### First-run setup` line
+    (inclusive) up to but not including the `### Reading the config`
+    line. If either anchor isn't found — or they appear out of order —
+    fail loudly and stop; do **not** silently leave the block in place.
+    After the strip, verify with `grep -c '### First-run setup' CLAUDE.md`
+    (must print `0`) and `grep -c '### Reading the config' CLAUDE.md`
+    (must print `1`).
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
@@ -104,7 +140,13 @@ mode, follow these adjustments:
   5. `CLAUDE.md` no longer contains the `### First-run setup` heading or
      its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
   6. `elnora whoami` and `elnora doctor` completed without
-     authentication errors.
+     authentication errors. Non-auth `elnora doctor` failures (e.g. an
+     `elnora setup claude` plugin-config check that's unrelated to the
+     API key) are NOT blocking — but you must record the failing check
+     by name in the transcript above the `HANDOFF_COMPLETE` line so the
+     log shows what wasn't green. Only auth-related failures (anything
+     mentioning api key, token, 401/403, network, unreachable) block
+     `HANDOFF_COMPLETE`.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
   this until the six-item checklist above is satisfied.
@@ -370,12 +412,44 @@ gh repo view <chosen-name> --web
 
 ### 7. Smoke test — confirm Elnora API is reachable
 
+Run `elnora doctor` and capture its full output (not just the exit code).
+On macOS / Linux:
+
 ```
-elnora doctor
+DOCTOR_OUT=$(elnora doctor 2>&1)
+DOCTOR_EXIT=$?
+echo "$DOCTOR_OUT"
 ```
 
-Should report green checks for config, auth, and API connectivity. If it
-errors, see `RECOVERY.md` → "Elnora auth fails".
+(On Windows PowerShell: `$DoctorOut = elnora doctor 2>&1; $DoctorExit =
+$LASTEXITCODE; Write-Host $DoctorOut`.)
+
+Show the user the output verbatim, then triage:
+
+- **Exit 0, all checks green.** Tell the user "All `elnora doctor` checks
+  passed." Move on to step 8.
+- **Any check failed.** Read the captured output and find the failing
+  check(s) by name (e.g. "API connectivity", "elnora setup claude plugin
+  config", "auth profile"). Repeat the failing check name(s) verbatim to
+  the user — do **not** summarize as "9/10 passed" without naming what
+  failed. Then classify:
+  - **Auth-related failure** — anything mentioning API key, token, 401,
+    403, network, unreachable, or connectivity. **This blocks.** Tell the
+    user the API can't be reached and what the doctor said, point them at
+    `RECOVERY.md` → "Elnora auth fails", and do **not** print
+    `HANDOFF_COMPLETE`. Stop here until they fix it.
+  - **Non-auth failure** — e.g. an `elnora setup claude` plugin-config
+    check, an optional integration, or a local-tooling warning unrelated
+    to the API. **Non-blocking.** Tell the user one short line about what
+    the check is and why it's not blocking (e.g. "the plugin-config check
+    is about local Claude Code settings, not your Elnora connection"),
+    note that you'll record it by name in the final transcript, and
+    proceed to step 8.
+
+If `elnora doctor` itself errors out (exit code non-zero with no
+recognizable check output, e.g. the binary crashed), treat that as an
+auth/connectivity failure and block — see `RECOVERY.md` → "Elnora auth
+fails".
 
 ### 8. Knowledge base setup (Obsidian) — optional but recommended
 
@@ -389,7 +463,20 @@ now? It's the recommended way to keep notes that I can read."**
   2. Asks the user to pick or paste a path.
   3. Copies `.claude/knowledge-base.local.md.template` → `.claude/knowledge-base.local.md`.
   4. Verifies the path exists.
-  5. Self-deletes the First-run setup block from `CLAUDE.md`.
+  5. Self-deletes the First-run setup block from `CLAUDE.md` using the
+     **anchor-pair strip**: find the literal `### First-run setup` line
+     (start anchor) and the literal `### Reading the config` line (end
+     anchor) and splice out everything from the start line (inclusive)
+     up to but not including the end line. Do **not** use a regex with
+     a positive lookahead — if either heading drifts the regex silently
+     fails and leaves scaffolding in production. If either anchor is
+     missing or they appear out of order, fail loudly and stop instead
+     of writing CLAUDE.md back. After the strip, verify with
+     `grep -c '### First-run setup' CLAUDE.md` (must print `0`) and
+     `grep -c '### Reading the config' CLAUDE.md` (must print `1`). The
+     concrete `python3 -c "..."` invocation is in the headless-mode
+     "Step 8 (Knowledge base)" block at the top of this file — interactive
+     mode uses the exact same strip.
 - **No, skip** → tell the user "No problem. Whenever you want to set this up
   later, just ask me 'help me set up my knowledge base' and I'll walk through
   it."

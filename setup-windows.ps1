@@ -267,9 +267,17 @@ function Invoke-Step {
     #
     # Captures stdout+stderr (via 2>&1) into a buffer while still echoing each
     # line live, so the FAILURE box can quote the last 10 lines of output.
+    #
+    # -SuppressPattern: optional regex; matching lines are still recorded in the
+    # capture buffer (so a FAILURE box can still quote them) but are NOT echoed
+    # to the user's terminal. Used to drop known noise (e.g. the Elnora
+    # installer's `VALIDATION_ERROR: API key is required` JSON, which the
+    # installer auto-emits when its post-install auth-setup step runs without
+    # a TTY/API key in CI - see the Elnora CLI step below).
     param(
         [Parameter(Mandatory)][string]$Label,
-        [Parameter(Mandatory)][scriptblock]$Action
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [string]$SuppressPattern = ""
     )
     $commandText = ($Action.ToString().Trim() -replace '\s+', ' ')
     $buffer = New-Object System.Text.StringBuilder
@@ -277,7 +285,9 @@ function Invoke-Step {
         & $Action 2>&1 | ForEach-Object {
             $line = $_.ToString()
             [void]$buffer.AppendLine($line)
-            Write-Host $line
+            if (-not $SuppressPattern -or $line -notmatch $SuppressPattern) {
+                Write-Host $line
+            }
         }
         if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
             Write-StepFailure -Label $Label -ExitCode $LASTEXITCODE `
@@ -480,6 +490,21 @@ $elnoraInstallerCommand = if ($elnoraCliVersion) {
     "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1')))"
 }
 
+# When the caller has set ELNORA_SKIP_HANDOFF=1 (CI smoke test, headless
+# bootstrap), the Elnora installer's auto-run "auth setup" step has no TTY
+# and no API key, so it prints a 5-line VALIDATION_ERROR JSON block plus
+# stray `System.Management.Automation.RemoteException` lines into the user
+# log. The installer itself still exits 0 (the JSON is informational), so
+# nothing real is broken - it's pure noise. Filter both shapes from
+# user-facing output while keeping them in the FAILURE-box capture buffer
+# in case the installer ever does fail in this mode and we need the bytes.
+# Real interactive users (no ELNORA_SKIP_HANDOFF) see everything as before.
+if ($env:ELNORA_SKIP_HANDOFF -eq "1") {
+    $elnoraNoisePattern = '"error":\s*"API key is required|"code":\s*"VALIDATION_ERROR"|"suggestion":\s*"Get your API key|^\s*\{\s*$|^\s*\}\s*$|System\.Management\.Automation\.RemoteException'
+} else {
+    $elnoraNoisePattern = ""
+}
+
 $elnoraIsInstalled = [bool](Get-Command elnora -ErrorAction SilentlyContinue)
 if (-not $elnoraIsInstalled) {
     Write-Host "[2/9] Installing Elnora CLI ($elnoraInstallLabel)..." -ForegroundColor Green
@@ -501,7 +526,7 @@ if (-not $elnoraIsInstalled) {
     # for some content types (including what cli.elnora.ai serves install.ps1
     # as), and `[scriptblock]::Create($byteArray)` then chokes trying to parse
     # decimal byte values like "35 32 69 108..." as PowerShell syntax.
-    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand }
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand } -SuppressPattern $elnoraNoisePattern
     Update-SessionPath
 
     # Same Group Policy fallback as Claude Code - copy the exe into WindowsApps
@@ -529,17 +554,42 @@ if (-not $elnoraIsInstalled) {
     $currentElnoraVersion = (& elnora --version 2>$null)
     if (-not $currentElnoraVersion) { $currentElnoraVersion = "unknown" }
     Write-Host "[2/9] Elnora CLI already installed ($currentElnoraVersion) - refreshing to $elnoraInstallLabel..." -ForegroundColor Green
-    Invoke-Step "Elnora CLI upgrade" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand }
+    Invoke-Step "Elnora CLI upgrade" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand } -SuppressPattern $elnoraNoisePattern
     Update-SessionPath
 }
 
-# --- [3/9] Node.js ---
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "[3/9] Installing Node.js..." -ForegroundColor Green
+# --- [3/9] Node.js (pinned to >=22 for Mac/Windows parity) ---
+# Mirror setup-mac.sh's major-version probe (lines 426-432). Bare
+# `Get-Command node` would let a pre-installed Node 18 / 20 satisfy the
+# check and skip the install - the user then keeps the wrong major and
+# every downstream tool that expects 22+ silently misbehaves.
+$nodeMajorOk = $false
+$nodeCurrentVersion = ""
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    try {
+        $nodeCurrentVersion = (& node --version 2>$null | Select-Object -First 1)
+        if ($nodeCurrentVersion -match '^v(\d+)') {
+            # [int] cast on the captured group - guards against a `node` shim
+            # that prints garbage (e.g. an n / nvm wrapper that shells out
+            # before printing). $matches[1] is only populated on a regex hit,
+            # so the -match gate above is the safety net.
+            $nodeMajor = [int]$matches[1]
+            if ($nodeMajor -ge 22) { $nodeMajorOk = $true }
+        }
+    } catch {
+        $nodeMajorOk = $false
+    }
+}
+if (-not $nodeMajorOk) {
+    if ($nodeCurrentVersion) {
+        Write-Host "[3/9] Detected Node $nodeCurrentVersion, upgrading to LTS (>=22)..." -ForegroundColor Yellow
+    } else {
+        Write-Host "[3/9] Installing Node.js LTS (>=22)..." -ForegroundColor Green
+    }
     Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 } else {
-    Write-Host "[3/9] Node.js already installed: $(node --version). Skipping." -ForegroundColor Gray
+    Write-Host "[3/9] Node.js already installed: $nodeCurrentVersion. Skipping." -ForegroundColor Gray
 }
 
 # --- [4/9] Git + user config ---
@@ -821,12 +871,24 @@ function Get-AppInstalled {
 }
 
 # Write-Status "<label>" "<version-or-empty>"
-# Empty / "not found" version => red [X] NOT INSTALLED
-# Anything else                => green [OK] <version>
+# Empty / "not found" version  => red [X] NOT INSTALLED
+# Sentinel "__SKIPPED_OPTIONAL" => gray [-] skipped (optional, env flag)
+# Anything else                 => green [OK] <version>
+#
+# The skipped-optional state is only set when ELNORA_SKIP_OPTIONAL_INSTALLS=1
+# (CI smoke test) caused the install step itself to be skipped AND the tool
+# isn't already on disk - so the tool genuinely isn't installed, but it's
+# not a failure either. Without the third state, those rows print as
+# alarming red NOT INSTALLED markers identical to a real failure.
 function Write-Status {
     param([string]$Label, [string]$Version)
     $padded = ($Label + ":").PadRight(13)
-    if (-not $Version -or $Version -eq "not found") {
+    if ($Version -eq "__SKIPPED_OPTIONAL") {
+        Write-Host "  " -NoNewline
+        Write-Host "-" -ForegroundColor DarkGray -NoNewline
+        Write-Host " $padded " -NoNewline
+        Write-Host "skipped (optional, env flag)" -ForegroundColor DarkGray
+    } elseif (-not $Version -or $Version -eq "not found") {
         Write-Host "  " -NoNewline
         Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline   # ✗
         Write-Host " $padded " -NoNewline
@@ -854,7 +916,12 @@ $vscodeExe = @(
 if ($vscodeExe) {
     $results["VS Code"] = Get-AppInstalled $vscodeExe 'VS Code'
 } else {
-    $results["VS Code"] = Get-ToolVersion 'code'
+    $codeVer = Get-ToolVersion 'code'
+    if (-not $codeVer -and $env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        $results["VS Code"] = "__SKIPPED_OPTIONAL"
+    } else {
+        $results["VS Code"] = $codeVer
+    }
 }
 
 $results["Claude Code"] = Get-ToolVersion 'claude'
@@ -877,6 +944,8 @@ if ($obsidianExe) {
     }
     if ($wingetHas) {
         $results["Obsidian"] = "installed (winget)"
+    } elseif ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        $results["Obsidian"] = "__SKIPPED_OPTIONAL"
     } else {
         $results["Obsidian"] = ""
     }
@@ -886,22 +955,42 @@ foreach ($key in $results.Keys) {
     Write-Status $key $results[$key]
 }
 
+# A "skipped optional" row is neither installed nor missing - it's a
+# deliberate non-event in CI. Exclude it from both counters so the headline
+# tells the truth ("All N installed" remains accurate when CI skipped the
+# optional editor / vault).
 $missing = @($results.GetEnumerator() | Where-Object { -not $_.Value -or $_.Value -eq "not found" }).Count
-$total   = $results.Count
+$skippedOptional = @($results.GetEnumerator() | Where-Object { $_.Value -eq "__SKIPPED_OPTIONAL" }).Count
+$total   = $results.Count - $skippedOptional
 Write-Host ""
 if ($missing -eq 0) {
-    Write-Host "  All $total components installed." -ForegroundColor Green
+    if ($skippedOptional -gt 0) {
+        Write-Host "  All $total required components installed ($skippedOptional optional skipped)." -ForegroundColor Green
+    } else {
+        Write-Host "  All $total components installed." -ForegroundColor Green
+    }
 } else {
     Write-Host "  $missing component(s) NOT installed - see red X rows above and remediation below." -ForegroundColor Red
     Write-Host "  If something says NOT INSTALLED but you think it is, open a new PowerShell/VS Code window and re-check."
 }
 Write-Host ""
-Write-Host "-------------------------------------------"
-Write-Host "  IMPORTANT - to see the new PATH in VS Code:"
-Write-Host "  Quit VS Code FULLY (File -> Exit), then reopen it."
-Write-Host "  Closing just the terminal panel is not enough -"
-Write-Host "  VS Code caches its PATH at app launch time."
-Write-Host "-------------------------------------------"
+Write-Host ""
+# VS Code reminder banner. Bright yellow box with blank lines above and below
+# so the "quit fully" rule reads as a separate section, not as another summary
+# row. Real users on workshops have walked past this in plain-text form and
+# wondered why their newly-installed `claude` / `elnora` commands weren't
+# visible in the VS Code integrated terminal - the answer is always that
+# VS Code cached its PATH at launch time.
+Write-Host "  +============================================================+" -ForegroundColor Yellow
+Write-Host "  |                                                            |" -ForegroundColor Yellow
+Write-Host "  |   IMPORTANT - to see the new PATH in VS Code:              |" -ForegroundColor Yellow
+Write-Host "  |                                                            |" -ForegroundColor Yellow
+Write-Host "  |   Quit VS Code FULLY (File -> Exit), then reopen it.       |" -ForegroundColor Yellow
+Write-Host "  |   Closing just the terminal panel is not enough -          |" -ForegroundColor Yellow
+Write-Host "  |   VS Code caches its PATH at app launch time.              |" -ForegroundColor Yellow
+Write-Host "  |                                                            |" -ForegroundColor Yellow
+Write-Host "  +============================================================+" -ForegroundColor Yellow
+Write-Host ""
 Write-Host ""
 
 if ($FailedSteps.Count -gt 0) {

@@ -86,6 +86,12 @@ vault synced via Google Drive, OneDrive, Dropbox, or stored locally).
 path and sub-directory layout in YAML frontmatter. This file is **gitignored**,
 so each user keeps their own copy.
 
+<!-- LOAD-BEARING MARKERS: do not rename without updating
+     INSTALL_FOR_AGENTS.md's CLAUDE.md self-clean instructions.
+     The strip code finds the literal headings `### First-run setup`
+     (start anchor) and `### Reading the config` (end anchor) and
+     deletes everything between them (inclusive of start, exclusive
+     of end). Renaming either heading silently breaks the strip. -->
 ### First-run setup
 
 This subsection is **self-destructing scaffolding** — it runs exactly once on
@@ -168,6 +174,9 @@ When triggered, Claude MUST on the first knowledge-base-related request:
    written to `.claude/knowledge-base.local.md`, and I trimmed the now-unused
    First-run setup block from `CLAUDE.md` so it won't clutter future sessions."
 
+<!-- LOAD-BEARING MARKER (end anchor): do not rename without updating
+     INSTALL_FOR_AGENTS.md's CLAUDE.md self-clean instructions. The
+     strip code keeps everything from this heading onward intact. -->
 ### Reading the config
 
 When Claude needs vault paths, it loads `.claude/knowledge-base.local.md` and
