@@ -1082,7 +1082,7 @@ if ($claudeAvailable) {
         $transcript = if ($env:ELNORA_HANDOFF_TRANSCRIPT) { $env:ELNORA_HANDOFF_TRANSCRIPT } else { Join-Path $env:USERPROFILE "handoff-transcript.jsonl" }
         Write-Host "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $transcript)" -ForegroundColor Cyan
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
-        # rejects the combo otherwise). --max-turns 80 caps a runaway loop;
+        # rejects the combo otherwise). --max-turns 120 caps a runaway loop;
         # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
         # create + push + verify) runs in full, so 80 leaves ~30-turn
         # headroom for transient retries (network, tool errors).
@@ -1090,7 +1090,7 @@ if ($claudeAvailable) {
             --permission-mode bypassPermissions `
             --output-format stream-json `
             --verbose `
-            --max-turns 80 `
+            --max-turns 120 `
           | Tee-Object -FilePath $transcript
         $rc = $LASTEXITCODE
         Write-Host ""
