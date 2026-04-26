@@ -799,6 +799,13 @@ try { Stop-Transcript | Out-Null } catch { }
 
 $claudeAvailable = Get-Command claude -ErrorAction SilentlyContinue
 if ($claudeAvailable) {
+    if ($env:ELNORA_SKIP_HANDOFF -eq "1") {
+        # CI/test escape hatch: print what would happen and exit cleanly. Used
+        # by .github/workflows/install-smoke-test.yml so the smoke test doesn't
+        # hang on Claude trying to open a browser for first-run auth.
+        Write-Host "ELNORA_SKIP_HANDOFF=1 set - would invoke claude with the Phase 2 prompt. Skipping for non-interactive run." -ForegroundColor Gray
+        exit 0
+    }
     Write-Host "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup." -ForegroundColor White
     Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
     Write-Host ""

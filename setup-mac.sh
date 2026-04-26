@@ -640,6 +640,13 @@ echo "==========================================="
 echo ""
 
 if command -v claude >/dev/null 2>&1; then
+    if [ "${ELNORA_SKIP_HANDOFF:-}" = "1" ]; then
+        # CI/test escape hatch: print what would happen and exit cleanly. Used
+        # by .github/workflows/install-smoke-test.yml so the smoke test doesn't
+        # hang on Claude trying to open a browser for first-run auth.
+        echo "ELNORA_SKIP_HANDOFF=1 set — would exec claude with the Phase 2 prompt. Skipping for non-interactive run."
+        exit 0
+    fi
     echo "Starting Claude — it will read INSTALL_FOR_AGENTS.md and finish setup."
     echo "On first run, your browser will open to log into your Claude Pro/Max account."
     echo ""
