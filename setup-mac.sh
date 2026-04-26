@@ -794,13 +794,15 @@ if command -v claude >/dev/null 2>&1; then
         TRANSCRIPT="${ELNORA_HANDOFF_TRANSCRIPT:-$HOME/handoff-transcript.jsonl}"
         echo "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $TRANSCRIPT)"
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
-        # rejects the combo otherwise). --max-turns 50 caps a runaway loop;
-        # Phase 2 should fit comfortably under 30 turns.
+        # rejects the combo otherwise). --max-turns 80 caps a runaway loop;
+        # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
+        # create + push + verify) runs in full, so 80 leaves ~30-turn
+        # headroom for transient retries (network, tool errors).
         claude -p "$HANDOFF_PROMPT" \
             --permission-mode bypassPermissions \
             --output-format stream-json \
             --verbose \
-            --max-turns 50 \
+            --max-turns 80 \
           | tee "$TRANSCRIPT"
         rc=${PIPESTATUS[0]}
         echo ""

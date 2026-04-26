@@ -581,13 +581,27 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
     }
 }
 if (-not $nodeMajorOk) {
-    if ($nodeCurrentVersion) {
-        Write-Host "[3/9] Detected Node $nodeCurrentVersion, upgrading to LTS (>=22)..." -ForegroundColor Yellow
+    # Gate the upgrade attempt on winget availability. Without this gate, an
+    # environment where winget is missing (corporate Group Policy, Windows
+    # Server CI runners) would print a noisy FAILURE box for Node.js even
+    # though there is a usable older Node already on PATH. Pre-polish, the
+    # script silently kept whatever Node was present; preserve that fallback.
+    if (-not $hasWinget) {
+        if ($nodeCurrentVersion) {
+            Write-Host "[3/9] Node.js: detected $nodeCurrentVersion (older than LTS 22). winget is not available, so the upgrade can't run automatically. Keeping the current version. To upgrade manually, install winget (Microsoft Store > 'App Installer') and re-run, or download Node 22+ from https://nodejs.org/." -ForegroundColor Yellow
+        } else {
+            Write-Host "[3/9] Node.js not found and winget is not available. Install Node 22+ manually from https://nodejs.org/ and re-run this script." -ForegroundColor Red
+            [void]$FailedSteps.Add("Node.js (winget unavailable, no fallback)")
+        }
     } else {
-        Write-Host "[3/9] Installing Node.js LTS (>=22)..." -ForegroundColor Green
+        if ($nodeCurrentVersion) {
+            Write-Host "[3/9] Detected Node $nodeCurrentVersion, upgrading to LTS (>=22)..." -ForegroundColor Yellow
+        } else {
+            Write-Host "[3/9] Installing Node.js LTS (>=22)..." -ForegroundColor Green
+        }
+        Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
+        Update-SessionPath
     }
-    Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
-    Update-SessionPath
 } else {
     Write-Host "[3/9] Node.js already installed: $nodeCurrentVersion. Skipping." -ForegroundColor Gray
 }
@@ -1068,13 +1082,15 @@ if ($claudeAvailable) {
         $transcript = if ($env:ELNORA_HANDOFF_TRANSCRIPT) { $env:ELNORA_HANDOFF_TRANSCRIPT } else { Join-Path $env:USERPROFILE "handoff-transcript.jsonl" }
         Write-Host "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $transcript)" -ForegroundColor Cyan
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
-        # rejects the combo otherwise). --max-turns 50 caps a runaway loop;
-        # Phase 2 should fit comfortably under 30 turns.
+        # rejects the combo otherwise). --max-turns 80 caps a runaway loop;
+        # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
+        # create + push + verify) runs in full, so 80 leaves ~30-turn
+        # headroom for transient retries (network, tool errors).
         & claude -p $HandoffPrompt `
             --permission-mode bypassPermissions `
             --output-format stream-json `
             --verbose `
-            --max-turns 50 `
+            --max-turns 80 `
           | Tee-Object -FilePath $transcript
         $rc = $LASTEXITCODE
         Write-Host ""
