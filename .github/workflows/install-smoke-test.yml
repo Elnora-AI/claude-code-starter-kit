@@ -64,6 +64,12 @@ jobs:
       - name: Run setup-mac.sh with handoff skipped
         env:
           ELNORA_SKIP_HANDOFF: "1"
+          # Pin in CI only — shared GitHub Actions runner IP pools routinely
+          # exhaust GitHub's 60/hr unauthenticated rate limit on
+          # api.github.com/repos/.../releases/latest, which is what the Elnora
+          # installer hits to resolve "latest". Real users on home/lab Wi-Fi
+          # default to latest; this env var only affects CI.
+          ELNORA_CLI_VERSION: "v1.5.0"
         run: |
           chmod +x setup-mac.sh
           bash setup-mac.sh
@@ -117,13 +123,18 @@ jobs:
           $ProgressPreference = 'SilentlyContinue'
           Install-PSResource -Name Microsoft.WinGet.Client -Repository PSGallery -TrustRepository -Reinstall
           Import-Module Microsoft.WinGet.Client
-          Repair-WinGetPackageManager -Latest -Force
+          # -AllUsers required on Windows Server (the cmdlet itself tells you
+          # this when run without it: "Failed to repair winget. Try running
+          # with -AllUsers in administrator mode."). GH runners are admin.
+          Repair-WinGetPackageManager -Latest -Force -AllUsers
           Write-Host "winget version: $(winget --version)"
 
       - name: Run setup-windows.ps1 with handoff skipped
         shell: pwsh
         env:
           ELNORA_SKIP_HANDOFF: "1"
+          # Same CI-only pin reasoning as the macOS job — see comment there.
+          ELNORA_CLI_VERSION: "v1.5.0"
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           .\setup-windows.ps1
