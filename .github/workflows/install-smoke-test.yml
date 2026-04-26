@@ -1,0 +1,89 @@
+name: install-smoke-test
+
+# Runs setup-mac.sh and setup-windows.ps1 on real GitHub-hosted runners with
+# ELNORA_SKIP_HANDOFF=1 so the script completes Phase 1 (install all tools,
+# print version summary, print handoff banner) without trying to launch
+# Claude — Claude can't auth on a headless runner.
+#
+# Caveats vs a true fresh-laptop dry run:
+#   - Runners come pre-loaded with dev tools (Git, Node, Python, gh on most).
+#     So most "install" steps hit the "already installed, skipping" path.
+#   - No GUI: can't test browser auth, VS Code PATH cache, or Xcode CLT dialog.
+#   - No corporate Group Policy, no antivirus interference.
+#   - Read-Host prompts would hang; we pre-set git config to avoid one.
+#
+# Trigger: workflow_dispatch (manual) + push to main when an install script
+# changes. Not on PRs to keep it lightweight; trigger manually via
+# `gh workflow run install-smoke-test.yml` when you want a sanity check.
+#
+# Security: this workflow uses no untrusted inputs (no github.event.*,
+# no github.head_ref, no PR titles/bodies). Only static commands and
+# pinned action versions.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "setup-mac.sh"
+      - "setup-windows.ps1"
+      - "install.sh"
+      - "install.ps1"
+      - ".github/workflows/install-smoke-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (setup-mac.sh)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre-set git config (skip Read prompt)
+        run: |
+          git config --global user.name "CI Smoke Test"
+          git config --global user.email "ci@elnora-starter-kit.test"
+
+      - name: Run setup-mac.sh with handoff skipped
+        env:
+          ELNORA_SKIP_HANDOFF: "1"
+        run: |
+          chmod +x setup-mac.sh
+          bash setup-mac.sh
+
+      - name: Show install log
+        if: always()
+        run: |
+          echo "=== ~/claude-starter-install.log ==="
+          cat "$HOME/claude-starter-install.log" || echo "(log not produced)"
+
+  windows:
+    name: Windows (setup-windows.ps1)
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pre-set git config (skip Read prompt)
+        shell: pwsh
+        run: |
+          git config --global user.name "CI Smoke Test"
+          git config --global user.email "ci@elnora-starter-kit.test"
+
+      - name: Run setup-windows.ps1 with handoff skipped
+        shell: pwsh
+        env:
+          ELNORA_SKIP_HANDOFF: "1"
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          .\setup-windows.ps1
+
+      - name: Show install log
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== claude-starter-install.log ==="
+          Get-Content "$env:USERPROFILE\claude-starter-install.log" -ErrorAction SilentlyContinue
