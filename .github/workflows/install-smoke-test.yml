@@ -64,12 +64,13 @@ jobs:
       - name: Run setup-mac.sh with handoff skipped
         env:
           ELNORA_SKIP_HANDOFF: "1"
-          # Pin in CI only — shared GitHub Actions runner IP pools routinely
-          # exhaust GitHub's 60/hr unauthenticated rate limit on
-          # api.github.com/repos/.../releases/latest, which is what the Elnora
-          # installer hits to resolve "latest". Real users on home/lab Wi-Fi
-          # default to latest; this env var only affects CI.
-          ELNORA_CLI_VERSION: "v1.5.0"
+          # NOTE: not pinning ELNORA_CLI_VERSION — we want to test the same
+          # path real users hit (install latest). Shared GitHub Actions runner
+          # IP pools occasionally exhaust GitHub's 60/hr unauthenticated rate
+          # limit on api.github.com/repos/.../releases/latest, so this step
+          # may flake intermittently. Re-running on the same SHA usually picks
+          # a different runner IP. A more permanent fix would be upstream
+          # support for GH_TOKEN auth in the cli.elnora.ai installer.
         run: |
           chmod +x setup-mac.sh
           bash setup-mac.sh
@@ -133,8 +134,9 @@ jobs:
         shell: pwsh
         env:
           ELNORA_SKIP_HANDOFF: "1"
-          # Same CI-only pin reasoning as the macOS job — see comment there.
-          ELNORA_CLI_VERSION: "v1.5.0"
+          # NOTE: not pinning ELNORA_CLI_VERSION — see matching comment in
+          # the macOS job above for the rate-limit-flake / upstream-fix
+          # reasoning.
         run: |
           Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
           .\setup-windows.ps1
