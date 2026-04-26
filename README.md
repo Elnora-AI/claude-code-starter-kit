@@ -52,13 +52,18 @@ the kit means trusting `raw.githubusercontent.com/Elnora-AI/elnora-starter-kit`,
    `setup-windows.ps1`. Installs Claude Code, the Elnora CLI, Node.js, Git,
    Python, VS Code, GitHub CLI, and Obsidian. Existing installations are
    detected and skipped. Output is written to `~/claude-starter-install.log`.
-2. **Claude authentication.** A browser window opens for Claude Pro/Max
-   login.
+2. **Authenticate services.** The script signs you into three accounts
+   sequentially before handing off to Claude:
+   - **Claude Pro/Max** — browser OAuth (required to continue).
+   - **GitHub CLI** — browser OAuth (skip allowed; Phase 2 will prompt
+     again if needed).
+   - **Elnora CLI** — paste your API key from
+     [app.elnora.ai/settings/api-keys](https://app.elnora.ai/settings/api-keys)
+     (skip allowed; the Elnora MCP will prompt on first use).
 3. **Phase 2 — agent handoff (~3–5 min).** Claude follows
    [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md): verifies installed
-   versions, prompts for the Elnora API key, **authenticates the GitHub
-   CLI, creates your private GitHub repo, and pushes the starter kit to
-   it**, runs a smoke test, and optionally configures an Obsidian
+   versions, **creates your private GitHub repo and pushes the starter
+   kit to it**, runs a smoke test, and optionally configures an Obsidian
    knowledge base.
 4. **Verification.** Claude generates a sample protocol to confirm the
    end-to-end setup.
