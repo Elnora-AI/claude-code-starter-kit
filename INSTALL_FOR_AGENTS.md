@@ -116,7 +116,7 @@ Tell the user exactly what to do, in this order:
 
 1. Open `https://platform.elnora.ai/settings`.
 2. Click the **API Keys** tab.
-3. Click **Create key**, name it after their machine (e.g. "carmens-mbp").
+3. Click **Create key**, name it after their machine (e.g. "my-laptop").
 4. Copy the key — it starts with `elnora_live_`.
 5. Paste it back to you in this chat.
 
