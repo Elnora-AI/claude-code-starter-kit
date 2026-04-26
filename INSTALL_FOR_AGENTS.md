@@ -25,9 +25,10 @@ mode, follow these adjustments:
 - **Skip every "ask the user" step.** If a step says "ask the user X",
   resolve X from the environment or filesystem instead, or skip the step.
 - **Step 3-4 (Elnora API key):** if `ELNORA_API_KEY` is already set in the
-  environment, use it directly. Skip the "Open the dashboard, click Create
-  key, paste it back" instructions. Still write `.env` and run `elnora
-  whoami` (top-level command, NOT `elnora auth whoami`).
+  environment, run `elnora auth login --api-key "$ELNORA_API_KEY"` to
+  persist it to `~/.elnora/profiles.toml`. Skip the "Open the dashboard,
+  click Create key, paste it back" instructions. Then run `elnora whoami`
+  (top-level command, NOT `elnora auth whoami`) to confirm.
 - **Step 8 (Knowledge base):** the test stages a fake Obsidian vault at
   `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
   Windows). Auto-detect it, write `.claude/knowledge-base.local.md`, AND
@@ -39,8 +40,9 @@ mode, follow these adjustments:
 - **Step 9 (Sample protocol):** skip — there is no user to wow.
 - **Before printing `HANDOFF_COMPLETE`, verify ALL of these are true.** If
   any item is missing, finish it before declaring complete:
-  1. `.env` exists at the repo root with `ELNORA_API_KEY=elnora_live_…`
-     and (on Mac/Linux) mode `600`.
+  1. `elnora auth status` reports `authenticated: true` (the API key is
+     persisted to `~/.elnora/profiles.toml`, so future shells stay
+     authed).
   2. `.git/` exists; `git remote -v` shows `elnora-upstream`.
   3. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
@@ -99,7 +101,7 @@ Ask the user: **"Do you already have an Elnora account?"**
 - **No / not sure** → tell them to open `https://platform.elnora.ai` and
   sign up. Wait. Once they confirm they're signed in, continue.
 
-### 4. Collect the Elnora API key
+### 4. Collect the Elnora API key and authenticate the CLI
 
 Tell the user exactly what to do, in this order:
 
@@ -109,21 +111,18 @@ Tell the user exactly what to do, in this order:
 4. Copy the key — it starts with `elnora_live_`.
 5. Paste it back to you in this chat.
 
-Once you have it, write it to `.env` at the repo root with mode 600:
+Once you have it, persist it to the CLI's profile store with `elnora auth
+login`. This writes to `~/.elnora/profiles.toml` (mode 600), so every new
+shell stays authenticated automatically:
 
 ```
-echo "ELNORA_API_KEY=<paste-key-here>" > .env
-chmod 600 .env
+elnora auth login --api-key <paste-key-here>
 ```
 
-(Windows: write `.env` and skip `chmod`; the `.gitignore` already protects it.)
-
-Confirm the file is correct:
-
-```
-ls -la .env  # mode should be -rw-------
-grep -c '^ELNORA_API_KEY=elnora_live_' .env  # should print 1
-```
+> Why not `.env`? The Elnora CLI does **not** read `.env` files. It reads
+> `~/.elnora/profiles.toml` (managed by `elnora auth login`) or the
+> `ELNORA_API_KEY` environment variable. Writing `.env` alone would leave
+> the user's CLI unauthed in every new terminal.
 
 ### 5. Verify the key works
 
@@ -132,8 +131,9 @@ elnora whoami
 ```
 
 This should return the user's email. If it errors with 401/403, the key is
-wrong — go back to step 4. If it errors with a network message, see
-`RECOVERY.md` → "Network blocked".
+wrong — go back to step 4 and run `elnora auth login --api-key …` with a
+fresh key. If it errors with a network message, see `RECOVERY.md` →
+"Network blocked".
 
 > Note: it's `elnora whoami` (top-level), NOT `elnora auth whoami`.
 > The `auth` subcommand only has `login | status | logout | profiles | validate`.
@@ -209,7 +209,8 @@ Tell the user:
 
 - ✅ Setup complete.
 - The repo lives at `<repo-path>`.
-- Their Elnora API key is in `.env` (mode 600, gitignored).
+- Their Elnora API key is saved to `~/.elnora/profiles.toml` (mode 600,
+  outside the repo, never committed). Every new terminal stays authed.
 - The Elnora CLI works globally — `elnora --help` from any terminal.
 - This is now their own repo (`origin` is free; `elnora-upstream` points at
   ours for future updates).

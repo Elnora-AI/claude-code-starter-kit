@@ -35,24 +35,33 @@ echo "  Repo:       $REPO_DIR"
 echo "  Transcript: $TRANSCRIPT"
 echo ""
 
-# --- .env file ---
-echo "[.env]"
-if [ -f .env ]; then
-    ok ".env exists"
-    # Mode 600 — Claude is told to chmod 600 it on Mac/Linux.
-    mode=$(stat -f '%Lp' .env 2>/dev/null || stat -c '%a' .env 2>/dev/null || echo "?")
+# --- Elnora CLI auth ---
+# The CLI persists credentials to ~/.elnora/profiles.toml via
+# `elnora auth login --api-key …`. Verify Claude actually authenticated
+# the CLI (not just exported a useless .env file — the CLI doesn't read
+# .env, so writing it does nothing for future shells).
+echo "[elnora auth]"
+if [ -f "$HOME/.elnora/profiles.toml" ]; then
+    ok "~/.elnora/profiles.toml exists"
+    mode=$(stat -f '%Lp' "$HOME/.elnora/profiles.toml" 2>/dev/null || stat -c '%a' "$HOME/.elnora/profiles.toml" 2>/dev/null || echo "?")
     if [ "$mode" = "600" ]; then
-        ok ".env mode is 600"
+        ok "profiles.toml mode is 600"
     else
-        fail ".env mode is $mode (expected 600)"
+        # The CLI writes 600 itself; warn but don't fail in case of umask quirks.
+        echo "  ⚠ profiles.toml mode is $mode (expected 600 — CLI usually sets this)"
     fi
-    if grep -q '^ELNORA_API_KEY=elnora_live_' .env; then
-        ok ".env contains ELNORA_API_KEY=elnora_live_*"
+    if grep -q '^api_key = "elnora_live_' "$HOME/.elnora/profiles.toml"; then
+        ok "profiles.toml contains api_key = elnora_live_*"
     else
-        fail ".env missing ELNORA_API_KEY=elnora_live_* line"
+        fail "profiles.toml missing api_key = \"elnora_live_*\" line"
     fi
 else
-    fail ".env was not created"
+    fail "~/.elnora/profiles.toml was not created (Claude did not run 'elnora auth login --api-key …')"
+fi
+if elnora auth status >/dev/null 2>&1; then
+    ok "elnora auth status returns success"
+else
+    fail "elnora auth status failed (CLI is not authenticated)"
 fi
 
 # --- git repo ---

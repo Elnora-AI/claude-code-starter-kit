@@ -43,21 +43,30 @@ Write-Host "  Repo:       $RepoDir"
 Write-Host "  Transcript: $Transcript"
 Write-Host ""
 
-# --- .env file ---
-Write-Host "[.env]"
-if (Test-Path .env) {
-    Assert-Ok ".env exists"
-    # On Windows we don't enforce mode 600 — INSTALL_FOR_AGENTS.md tells
-    # Claude to skip chmod on Windows since .gitignore protects it.
-    $envContent = Get-Content .env -Raw
-    if ($envContent -match '(?m)^ELNORA_API_KEY=elnora_live_') {
-        Assert-Ok ".env contains ELNORA_API_KEY=elnora_live_*"
+# --- Elnora CLI auth ---
+# The CLI persists credentials to ~/.elnora/profiles.toml via
+# `elnora auth login --api-key …`. Verify Claude actually authenticated
+# the CLI (not just wrote a useless .env file — the CLI doesn't read .env).
+Write-Host "[elnora auth]"
+$profilesPath = Join-Path $env:USERPROFILE ".elnora\profiles.toml"
+if (Test-Path $profilesPath) {
+    Assert-Ok "$profilesPath exists"
+    $profilesContent = Get-Content $profilesPath -Raw
+    if ($profilesContent -match '(?m)^api_key = "elnora_live_') {
+        Assert-Ok "profiles.toml contains api_key = elnora_live_*"
     } else {
-        Assert-Fail ".env missing ELNORA_API_KEY=elnora_live_* line"
+        Assert-Fail "profiles.toml missing api_key = `"elnora_live_*`" line"
     }
 } else {
-    Assert-Fail ".env was not created"
+    Assert-Fail "$profilesPath was not created (Claude did not run 'elnora auth login --api-key …')"
 }
+elnora auth status > $null 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Assert-Ok "elnora auth status returns success"
+} else {
+    Assert-Fail "elnora auth status failed (CLI is not authenticated)"
+}
+$global:LASTEXITCODE = 0
 
 # --- git repo ---
 Write-Host ""

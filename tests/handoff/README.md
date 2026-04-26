@@ -14,12 +14,17 @@ Phase 2 work.
 
 After the headless handoff completes, `assert.sh` / `assert.ps1` verifies:
 
-1. `.env` was created with `ELNORA_API_KEY=elnora_live_…` and mode 600 (Mac).
+1. `~/.elnora/profiles.toml` (or `%USERPROFILE%\.elnora\profiles.toml`)
+   contains `api_key = "elnora_live_…"`, AND `elnora auth status` returns
+   success — i.e. Claude actually authenticated the CLI, not just dropped
+   a useless `.env` file the CLI doesn't read.
 2. `.git/` exists and `git remote get-url elnora-upstream` resolves.
 3. `.claude/knowledge-base.local.md` was created and the placeholder is gone.
 4. The `### First-run setup` block in `CLAUDE.md` was self-deleted.
 5. The transcript contains the `HANDOFF_COMPLETE` marker.
-6. The transcript shows Claude actually invoked the Elnora CLI.
+6. The transcript shows Claude ran an Elnora CLI auth/verification command
+   (`whoami`, `doctor`, `auth login`, or `auth status`) — not just
+   `elnora --version`.
 
 ## How to run it (manual only)
 
