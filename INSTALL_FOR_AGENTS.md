@@ -30,11 +30,27 @@ mode, follow these adjustments:
   whoami`.
 - **Step 8 (Knowledge base):** the test stages a fake Obsidian vault at
   `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
-  Windows). Auto-detect it and proceed. If you don't find a vault, skip the
-  step rather than asking.
+  Windows). Auto-detect it, write `.claude/knowledge-base.local.md`, AND
+  **then edit `CLAUDE.md` to delete the entire `### First-run setup`
+  subsection** (heading + every line through the end of "step 5" of that
+  block). The self-clean is REQUIRED — it's step 5 of CLAUDE.md's First-run
+  setup, and skipping it leaves scaffolding in the production CLAUDE.md
+  forever. If you don't find a vault, skip the whole step.
 - **Step 9 (Sample protocol):** skip — there is no user to wow.
+- **Before printing `HANDOFF_COMPLETE`, verify ALL of these are true.** If
+  any item is missing, finish it before declaring complete:
+  1. `.env` exists at the repo root with `ELNORA_API_KEY=elnora_live_…`
+     and (on Mac/Linux) mode `600`.
+  2. `.git/` exists; `git remote -v` shows `elnora-upstream`.
+  3. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
+     a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
+  4. `CLAUDE.md` no longer contains the `### First-run setup` heading or
+     its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
+  5. `elnora auth whoami` and `elnora doctor` (or `elnora protocol list`)
+     completed without authentication errors.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
-  line. The test runner uses it as the completion marker.
+  line. The test runner uses it as the completion marker. Do NOT print
+  this until the five-item checklist above is satisfied.
 
 ---
 
