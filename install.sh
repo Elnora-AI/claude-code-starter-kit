@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Elnora Starter Kit — One-liner Installer (macOS)
+# Elnora Starter Kit - One-liner Installer (macOS)
 # ============================================================
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
@@ -17,7 +17,7 @@ BRANCH="main"
 TARGET_DIR="$HOME/Documents/elnora-starter-kit"
 
 echo "==========================================="
-echo "  Elnora Starter Kit — Bootstrap"
+echo "  Elnora Starter Kit - Bootstrap"
 echo "==========================================="
 echo ""
 echo "This will:"
@@ -53,7 +53,7 @@ echo ""
 # Redirect stdin from /dev/tty so the setup script's `read` prompts (git
 # config name/email) still work when install.sh was invoked via
 # `curl ... | bash` (curl's pipe leaves stdin closed). Fall back to the
-# inherited stdin when /dev/tty isn't accessible — e.g. CI runners with no
+# inherited stdin when /dev/tty isn't accessible - e.g. CI runners with no
 # controlling terminal, where the redirect itself would fail with "no such
 # device" and abort the script before setup-mac.sh ran.
 if [ -c /dev/tty ] && (exec 3</dev/tty) 2>/dev/null; then

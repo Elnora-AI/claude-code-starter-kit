@@ -44,11 +44,38 @@ on:
       - "install.sh"
       - "install.ps1"
       - ".github/workflows/install-smoke-test.yml"
+      - ".github/scripts/lint-ascii.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - "setup-mac.sh"
+      - "setup-windows.ps1"
+      - "install.sh"
+      - "install.ps1"
+      - ".github/workflows/install-smoke-test.yml"
+      - ".github/scripts/lint-ascii.py"
 
 permissions:
   contents: read
 
 jobs:
+  lint-ascii:
+    # Fast gate: rejects any non-ASCII char appearing outside a `#` comment in
+    # the four user-facing setup/install scripts. Why: Windows PowerShell 5.1
+    # (the default on Win10/11) reads .ps1 files as Windows-1252 unless they
+    # carry a UTF-8 BOM. A stray em-dash or curly quote inside a "..." string
+    # gets mojibaked into bytes that include a `"`, which closes the string
+    # early and cascades parser errors through the rest of the file. We saw
+    # exactly this break a real client install. Easier to enforce ASCII than
+    # to manage BOMs across editors and `git archive` zip flows.
+    name: ASCII-only lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+      - name: Reject non-ASCII outside # comments
+        run: python3 .github/scripts/lint-ascii.py
+
   macos:
     name: macOS (setup-mac.sh)
     runs-on: macos-14

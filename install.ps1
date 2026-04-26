@@ -1,5 +1,5 @@
 # ============================================================
-# Elnora Starter Kit — One-liner Installer (Windows)
+# Elnora Starter Kit - One-liner Installer (Windows)
 # ============================================================
 # Usage (PowerShell):
 #   irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
