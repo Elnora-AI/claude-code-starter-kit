@@ -55,7 +55,7 @@ jobs:
       ELNORA_CLI_VERSION: v1.5.0
       ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify required secrets are present
         run: |
@@ -141,7 +141,7 @@ jobs:
 
       - name: Upload transcript as artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: handoff-transcript-macos
           path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
@@ -167,7 +167,7 @@ jobs:
       # Same rationale as install-smoke-test.yml — windows-2022 has no winget.
       ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify required secrets are present
         shell: pwsh
@@ -257,7 +257,7 @@ jobs:
 
       - name: Upload transcript as artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: handoff-transcript-windows
           path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
