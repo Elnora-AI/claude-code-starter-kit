@@ -15,6 +15,7 @@
 # ============================================================
 
 set -u
+set -o pipefail
 
 REPO_DIR="${1:-$PWD}"
 TRANSCRIPT="${2:-$HOME/handoff-transcript.jsonl}"

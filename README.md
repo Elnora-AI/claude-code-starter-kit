@@ -50,9 +50,11 @@ the kit means trusting `raw.githubusercontent.com/Elnora-AI/elnora-starter-kit`,
 1. **Phase 1 — automated install (~5–10 min).** Clones the repo to
    `~/Documents/elnora-starter-kit/` and runs `setup-mac.sh` or
    `setup-windows.ps1`. Installs Claude Code, the Elnora CLI, Node.js, Git,
-   Python, VS Code, GitHub CLI, and Obsidian. Existing installations are
-   detected and skipped. Output is written to `~/claude-starter-install.log`
-   (macOS) or `%USERPROFILE%\claude-starter-install.log` (Windows).
+   Python, VS Code, GitHub CLI, and Obsidian. Also creates an empty
+   `~/Documents/Projects/` folder as a default home for future repos you
+   build with Claude. Existing installations are detected and skipped.
+   Output is written to `~/claude-starter-install.log` (macOS) or
+   `%USERPROFILE%\claude-starter-install.log` (Windows).
 2. **Authenticate services.** The script signs you into three accounts
    sequentially before handing off to Claude:
    - **Claude Pro/Max** — browser OAuth (required to continue).
