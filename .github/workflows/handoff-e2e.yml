@@ -149,6 +149,55 @@ jobs:
           echo "ELNORA_KIT_DIR=$STAGED" >> "$GITHUB_ENV"
           ls -la "$STAGED"
 
+      - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
+        # The agent in headless mode is NOT allowed to write under .claude/
+        # paths (sensitive-paths guard fires there even with
+        # bypassPermissions). The harness writes the kb config the agent
+        # would otherwise have produced. Mirrors what the user-facing
+        # First-run setup flow ends up with for a real Obsidian vault.
+        # The agent's job becomes: verify this file exists + the path
+        # resolves. See INSTALL_FOR_AGENTS.md "Step 8 (Knowledge base)".
+        env:
+          KIT_DIR: ${{ runner.temp }}/kit
+          VAULT_HOME: ${{ runner.temp }}
+        run: |
+          mkdir -p "$KIT_DIR/.claude"
+          {
+            echo '---'
+            echo "vault_path: $HOME/Documents/test-vault"
+            echo '---'
+            echo ''
+            echo '# Knowledge Base Settings (headless test harness)'
+          } > "$KIT_DIR/.claude/knowledge-base.local.md"
+          echo "  Wrote $KIT_DIR/.claude/knowledge-base.local.md"
+
+      - name: Pre-clean CLAUDE.md First-run setup block (anchor-pair strip)
+        # Strip the First-run setup block from CLAUDE.md the same way the
+        # agent would: from `### First-run setup` (inclusive) up to but
+        # NOT including `### Reading the config`. With the kb config
+        # pre-staged above, the agent's job is to verify the end state,
+        # not produce it. Heredoc uses single-quoted PY tag so no shell
+        # interpolation happens inside the python block.
+        env:
+          KIT_DIR: ${{ runner.temp }}/kit
+        run: |
+          python3 - "$KIT_DIR/CLAUDE.md" <<'PY'
+          import sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          lines = p.read_text().splitlines(keepends=True)
+          start = end = None
+          for n, line in enumerate(lines):
+              if line.rstrip() == "### First-run setup" and start is None:
+                  start = n
+              elif line.rstrip() == "### Reading the config" and end is None:
+                  end = n
+          if start is None or end is None or end <= start:
+              sys.stderr.write(f"CLAUDE.md anchor strip FAILED: anchors={start},{end}\n")
+              sys.exit(1)
+          p.write_text("".join(lines[:start] + lines[end:]))
+          print(f"Stripped CLAUDE.md First-run setup block (lines {start}-{end-1}).")
+          PY
+
       - name: Run setup-mac.sh in headless handoff mode
         working-directory: ${{ runner.temp }}/kit
         run: |
@@ -344,6 +393,56 @@ jobs:
           $global:LASTEXITCODE = 0
           "ELNORA_KIT_DIR=$staged" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Get-ChildItem $staged | Format-Table Name, Length
+
+      - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
+        # The agent in headless mode is NOT allowed to write under .claude/
+        # paths. The harness writes the kb config the agent would otherwise
+        # have produced. Mirrors what the user-facing First-run setup flow
+        # ends up with for a real Obsidian vault. Agent's job becomes
+        # verify-only. See INSTALL_FOR_AGENTS.md "Step 8 (Knowledge base)".
+        shell: pwsh
+        run: |
+          $staged = Join-Path $env:RUNNER_TEMP "kit"
+          $claudeDir = Join-Path $staged ".claude"
+          New-Item -ItemType Directory -Force -Path $claudeDir | Out-Null
+          # Use forward slashes in vault_path even on Windows — the kb
+          # config doc says they work everywhere and avoid YAML escaping.
+          $vaultPath = ($env:USERPROFILE -replace '\\','/') + "/Documents/test-vault"
+          $kbContent = "---`nvault_path: $vaultPath`n---`n`n# Knowledge Base Settings (headless test harness)`n"
+          $kbPath = Join-Path $claudeDir "knowledge-base.local.md"
+          [System.IO.File]::WriteAllText($kbPath, $kbContent, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "  Wrote $kbPath"
+
+      - name: Pre-clean CLAUDE.md First-run setup block (anchor-pair strip)
+        # Strip the First-run setup block from CLAUDE.md the same way the
+        # agent would: from `### First-run setup` (inclusive) up to but
+        # NOT including `### Reading the config`. With the kb config
+        # pre-staged above, the agent's job is to verify the end state,
+        # not produce it.
+        shell: pwsh
+        run: |
+          $staged = Join-Path $env:RUNNER_TEMP "kit"
+          $claudeMd = Join-Path $staged "CLAUDE.md"
+          $lines = Get-Content -LiteralPath $claudeMd
+          $startIdx = $null
+          $endIdx = $null
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+              $trimmed = $lines[$i].TrimEnd()
+              if ($trimmed -eq "### First-run setup" -and $null -eq $startIdx) {
+                  $startIdx = $i
+              } elseif ($trimmed -eq "### Reading the config" -and $null -eq $endIdx) {
+                  $endIdx = $i
+              }
+          }
+          if ($null -eq $startIdx -or $null -eq $endIdx -or $endIdx -le $startIdx) {
+              Write-Host "::error::CLAUDE.md anchor strip FAILED: anchors=$startIdx,$endIdx"
+              exit 1
+          }
+          $kept = @()
+          if ($startIdx -gt 0) { $kept += $lines[0..($startIdx - 1)] }
+          $kept += $lines[$endIdx..($lines.Count - 1)]
+          [System.IO.File]::WriteAllLines($claudeMd, $kept, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "Stripped CLAUDE.md First-run setup block (lines $startIdx-$($endIdx - 1))."
 
       - name: Run setup-windows.ps1 in headless handoff mode
         shell: pwsh

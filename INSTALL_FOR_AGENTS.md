@@ -31,72 +31,57 @@ mode, follow these adjustments:
   persist it to `~/.elnora/profiles.toml`. Skip the "Open the dashboard,
   click Create key, paste it back" instructions. Then run `elnora whoami`
   (top-level command, NOT `elnora auth whoami`) to confirm.
-- **Step 8 (Knowledge base):** the test stages a fake Obsidian vault at
-  `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
-  Windows). Auto-detect it, write `.claude/knowledge-base.local.md`, AND
-  **then edit `CLAUDE.md` to delete the entire `### First-run setup`
-  subsection** using the anchor-pair strip described below. The self-clean
-  is REQUIRED — it's step 5 of CLAUDE.md's First-run setup, and skipping
-  it leaves scaffolding in the production CLAUDE.md forever. If you
-  don't find a vault, **still create
-  `.claude/knowledge-base.local.md`** by copying the template
-  verbatim — leave `vault_path:` as the literal placeholder
-  `<ABSOLUTE_PATH_TO_YOUR_VAULT>`. Don't skip writing the file: the
-  post-handoff assertion checks for its existence and detects the
-  placeholder string to soft-skip the path-replacement check.
-  - **Sensitive-paths shortcut.** When writing
-    `.claude/knowledge-base.local.md`, the `Write` and `Edit` tools (and
-    `Bash` heredoc constructions like `cat > ... << 'EOF'`) are blocked
-    by Claude Code's hard-coded sensitive-paths guard — it fires even
-    with `--permission-mode bypassPermissions` and costs ~5 turns each
-    headless run while you re-try with different forms. Skip the dance:
-    write directly with a single `Bash` call to
-    `python3 -c "open('.claude/knowledge-base.local.md','w').write('''<contents>''')"`
-    (or PowerShell `Set-Content` on Windows) and move on.
-  - **CLAUDE.md self-clean — anchor-pair strip (do this, not regex).**
-    The First-run setup block in `CLAUDE.md` is bounded by two
-    load-bearing heading lines: `### First-run setup` (start anchor) and
-    `### Reading the config` (end anchor). Strip the block by finding
-    those literal lines and splicing them out — do **not** use a regex
-    with a positive lookahead, because if either heading drifts the
-    regex silently fails and leaves scaffolding in production. Use a
-    line-based search-and-splice instead. A single `Bash` call works
-    (same `python3 -c "..."` pattern as the sensitive-paths shortcut
-    above):
+- **Step 8 (Knowledge base):** the workflow pre-stages a fake Obsidian
+  vault at `~/Documents/test-vault/` (or
+  `%USERPROFILE%\Documents\test-vault\` on Windows) AND writes
+  `.claude/knowledge-base.local.md` for you before this script runs. Your
+  job in headless mode is **verify only — do not write `.claude/`
+  paths**:
+  1. Confirm `.claude/knowledge-base.local.md` exists.
+  2. Read it and confirm `vault_path:` resolves to a real directory
+     (`~/Documents/test-vault/` should exist with a few files inside).
+  3. If either check fails, surface the failure in the transcript and do
+     not print `HANDOFF_COMPLETE` — the workflow should have staged this
+     file, and missing it means the harness is broken.
+  - **Do not write to `.claude/` paths in headless mode.** Claude Code's
+    sensitive-paths guard blocks `Write`/`Edit`/`Bash`-heredoc on those
+    paths even under `--permission-mode bypassPermissions`. The workflow
+    handles all `.claude/*` writes; the agent's job is to verify, not
+    create. If you find yourself reaching for a workaround
+    (`python3 -c`, indirect `printf` redirections, etc.), stop and
+    surface the missing pre-stage to the transcript instead — that's a
+    bug in the harness, not something to paper over from the agent side.
+  - **CLAUDE.md self-clean — use the Edit tool with literal anchors.**
+    `CLAUDE.md` is at the repo root and is **not** under the
+    sensitive-paths guard, so `Read` + `Edit` work normally. The
+    First-run setup block is bounded by two load-bearing heading lines:
+    `### First-run setup` (start anchor) and `### Reading the config`
+    (end anchor). To remove the block:
+    1. `Read` `CLAUDE.md` to see the current content.
+    2. Use the `Edit` tool with `old_string` set to the entire block
+       starting at `### First-run setup` (inclusive) up to but **not
+       including** `### Reading the config`, and `new_string` set to
+       `""` (empty).
+    3. Verify with two `Bash` calls:
+       `grep -c '### First-run setup' CLAUDE.md` must print `0`, and
+       `grep -c '### Reading the config' CLAUDE.md` must print `1`.
 
-    ```
-    python3 -c "
-    import sys
-    p = 'CLAUDE.md'
-    lines = open(p).read().splitlines(keepends=True)
-    start = end = None
-    for n, line in enumerate(lines):
-        if line.rstrip() == '### First-run setup' and start is None:
-            start = n
-        elif line.rstrip() == '### Reading the config' and end is None:
-            end = n
-    if start is None or end is None or end <= start:
-        sys.stderr.write('CLAUDE.md self-clean FAILED: anchors missing or out of order ' + repr((start, end)) + '\n')
-        sys.exit(1)
-    open(p, 'w').writelines(lines[:start] + lines[end:])
-    "
-    ```
-
-    The strip deletes everything from the `### First-run setup` line
-    (inclusive) up to but not including the `### Reading the config`
-    line. If either anchor isn't found — or they appear out of order —
-    fail loudly and stop; do **not** silently leave the block in place.
-    After the strip, verify with `grep -c '### First-run setup' CLAUDE.md`
-    (must print `0`) and `grep -c '### Reading the config' CLAUDE.md`
-    (must print `1`).
+    If either anchor isn't found in step 1, **stop** and surface the
+    error — do not invent a workaround, do not skip the self-clean.
+    Do **not** use a regex with a positive lookahead (silent failures
+    if anchors drift) and do **not** use `python3 -c` to splice the
+    file from a `Bash` call (gives an agent a generic file-write
+    primitive that bypasses tool-level guards). The `Edit` tool is the
+    right interface — it's auditable in the transcript.
   - **Commit shape — fold into the initial commit, don't add a second.**
-    When you commit the CLAUDE.md self-clean and
-    `.claude/knowledge-base.local.md`, fold both changes into the initial
-    commit (use `git add` followed by `git commit --amend --no-edit`).
-    Don't create a second "cleanup" commit — the initial state should be
-    one clean commit. If step 6 already created the initial commit before
-    step 8 ran, amend it after the strip + write; if step 8 ran first,
-    just include the changes when step 6 stages and commits.
+    The pre-staged `.claude/knowledge-base.local.md` and the CLAUDE.md
+    self-clean above both land in the working tree **before** step 6's
+    `git add . && git commit -m "Initial commit"` runs, so they're
+    naturally included in the initial commit — no separate "cleanup"
+    commit needed. If you somehow run the self-clean *after* step 6
+    already committed, fold the change in with `git add CLAUDE.md &&
+    git commit --amend --no-edit` rather than adding a second commit.
+    The initial state should be one clean commit.
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
@@ -496,19 +481,21 @@ now? It's the recommended way to keep notes that I can read."**
   3. Copies `.claude/knowledge-base.local.md.template` → `.claude/knowledge-base.local.md`.
   4. Verifies the path exists.
   5. Self-deletes the First-run setup block from `CLAUDE.md` using the
-     **anchor-pair strip**: find the literal `### First-run setup` line
-     (start anchor) and the literal `### Reading the config` line (end
-     anchor) and splice out everything from the start line (inclusive)
-     up to but not including the end line. Do **not** use a regex with
-     a positive lookahead — if either heading drifts the regex silently
-     fails and leaves scaffolding in production. If either anchor is
-     missing or they appear out of order, fail loudly and stop instead
-     of writing CLAUDE.md back. After the strip, verify with
-     `grep -c '### First-run setup' CLAUDE.md` (must print `0`) and
-     `grep -c '### Reading the config' CLAUDE.md` (must print `1`). The
-     concrete `python3 -c "..."` invocation is in the headless-mode
-     "Step 8 (Knowledge base)" block at the top of this file — interactive
-     mode uses the exact same strip.
+     **`Edit` tool with literal anchors**: read `CLAUDE.md`, then call
+     `Edit` with `old_string` set to the full block starting at
+     `### First-run setup` (inclusive) up to but **not including**
+     `### Reading the config`, and `new_string` set to `""` (empty).
+     Do **not** use a regex with a positive lookahead — if either
+     heading drifts the regex silently fails and leaves scaffolding in
+     production. Do **not** use `python3 -c` from `Bash` to splice the
+     file (the `Edit` tool is the auditable interface; a one-shot
+     `python3` write gives the agent a generic file-mutation primitive
+     that bypasses tool-level guards). If either anchor isn't found,
+     stop and report it — do not silently proceed. After the edit,
+     verify with `grep -c '### First-run setup' CLAUDE.md` (must print
+     `0`) and `grep -c '### Reading the config' CLAUDE.md` (must print
+     `1`). Headless mode uses the exact same approach (see Step 8 in
+     the headless-mode block at the top of this file).
 - **No, skip** → tell the user "No problem. Whenever you want to set this up
   later, just ask me 'help me set up my knowledge base' and I'll walk through
   it."

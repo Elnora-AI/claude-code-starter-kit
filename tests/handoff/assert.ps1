@@ -192,6 +192,33 @@ if ($claudeMd -match '### First-run setup') {
     Assert-Ok "CLAUDE.md '### First-run setup' block was removed"
 }
 
+# --- INSTALL_FOR_AGENTS.md hardening (no sensitive-paths bypass coaching) ---
+# Regression check: PR1 of the security plan removed the python3 -c bypass
+# instructions that gave agents a generic file-write primitive against
+# .claude/ paths. The doc still mentions `python3 -c` inside backticks
+# ("do not use python3 -c ...") which is fine; we only fail on actual
+# code-block invocations and on python file-opens against .claude/ paths.
+Write-Host ""
+Write-Host "[INSTALL_FOR_AGENTS.md hardening]"
+$installForAgents = "INSTALL_FOR_AGENTS.md"
+if (Test-Path -LiteralPath $installForAgents) {
+    $docLines = Get-Content -LiteralPath $installForAgents
+    $indentedPython = $docLines | Where-Object { $_ -match '^\s+python3? -c' }
+    if ($indentedPython) {
+        Assert-Fail "$installForAgents contains an indented 'python3 -c' invocation (looks like coaching)"
+    } else {
+        Assert-Ok "$installForAgents has no indented python3 -c invocations"
+    }
+    $sensitivePathOpen = $docLines | Where-Object { $_ -match "open\(['""][^'""]*\.claude/" }
+    if ($sensitivePathOpen) {
+        Assert-Fail "$installForAgents contains a python open() call against .claude/ (sensitive-paths bypass)"
+    } else {
+        Assert-Ok "$installForAgents has no python open() against .claude/ paths"
+    }
+} else {
+    Assert-Fail "$installForAgents not found in $RepoDir"
+}
+
 # --- HANDOFF_COMPLETE marker in transcript ---
 Write-Host ""
 Write-Host "[transcript]"

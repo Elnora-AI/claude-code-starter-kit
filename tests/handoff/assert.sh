@@ -153,6 +153,30 @@ else
     ok "CLAUDE.md '### First-run setup' block was removed"
 fi
 
+# --- INSTALL_FOR_AGENTS.md hardening (no sensitive-paths bypass coaching) ---
+# Regression check: PR1 of the security plan removed the python3 -c bypass
+# instructions that gave agents a generic file-write primitive against
+# .claude/ paths. If anyone reintroduces them, this fires. The doc still
+# mentions `python3 -c` inside backticks ("do **not** use python3 -c …")
+# which is fine; we only fail on actual code-block invocations and on
+# python file-opens against .claude/ paths.
+echo ""
+echo "[INSTALL_FOR_AGENTS.md hardening]"
+if [ -f INSTALL_FOR_AGENTS.md ]; then
+    if grep -nE "^[[:space:]]+python3? -c" INSTALL_FOR_AGENTS.md >/dev/null 2>&1; then
+        fail "INSTALL_FOR_AGENTS.md contains an indented 'python3 -c' invocation (looks like coaching)"
+    else
+        ok "INSTALL_FOR_AGENTS.md has no indented python3 -c invocations"
+    fi
+    if grep -nE "open\(['\"][^'\"]*\.claude/" INSTALL_FOR_AGENTS.md >/dev/null 2>&1; then
+        fail "INSTALL_FOR_AGENTS.md contains a python open() call against .claude/ (sensitive-paths bypass)"
+    else
+        ok "INSTALL_FOR_AGENTS.md has no python open() against .claude/ paths"
+    fi
+else
+    fail "INSTALL_FOR_AGENTS.md not found in $REPO_DIR"
+fi
+
 # --- HANDOFF_COMPLETE marker in transcript ---
 echo ""
 echo "[transcript]"
