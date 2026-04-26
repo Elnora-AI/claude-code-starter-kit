@@ -86,6 +86,16 @@ mode, follow these adjustments:
     (must print `1`).
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
+  - **Do NOT strip `.github/` or `tests/` from the working tree.** The
+    customer-flow `install.sh` strips these before setup-mac.sh runs, but
+    in headless CI we run setup-mac.sh / setup-windows.ps1 directly and
+    the post-state assertion step depends on `tests/handoff/assert.sh`
+    (and `.github/` files) being present. If you see `.github/` and
+    `tests/` in the working tree, leave them alone — `git add . && git
+    commit` should include them in the initial commit. Do NOT run
+    `git rm -r .github/ tests/` or `git commit --amend` to strip them.
+    The doc text saying "already stripped by the installer" applies to
+    customer flow; ignore it here.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
     handoff-e2e workflow), do step 6 in full but with these adjustments:
     - **6b (auth):** instead of opening a browser, pipe the token into
