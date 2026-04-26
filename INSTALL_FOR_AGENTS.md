@@ -16,6 +16,26 @@ Be transparent: announce each step before you run it, show the output, and
 explain what you found. The user is likely a lab scientist who has never
 coded before — keep your language plain and your steps small.
 
+### Non-interactive / test mode
+
+If your environment has `ELNORA_HANDOFF_MODE=headless` set, you are running
+inside the `handoff-e2e` test workflow. There is no human to talk to. In that
+mode, follow these adjustments:
+
+- **Skip every "ask the user" step.** If a step says "ask the user X",
+  resolve X from the environment or filesystem instead, or skip the step.
+- **Step 3-4 (Elnora API key):** if `ELNORA_API_KEY` is already set in the
+  environment, use it directly. Skip the "Open the dashboard, click Create
+  key, paste it back" instructions. Still write `.env` and run `elnora auth
+  whoami`.
+- **Step 8 (Knowledge base):** the test stages a fake Obsidian vault at
+  `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
+  Windows). Auto-detect it and proceed. If you don't find a vault, skip the
+  step rather than asking.
+- **Step 9 (Sample protocol):** skip — there is no user to wow.
+- **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
+  line. The test runner uses it as the completion marker.
+
 ---
 
 ## Phase 2 — finish setup

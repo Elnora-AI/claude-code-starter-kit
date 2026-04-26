@@ -895,6 +895,11 @@ Write-Host ""
 # Claude can read it as part of Phase 2.
 try { Stop-Transcript | Out-Null } catch { }
 
+# The exact prompt handed to Claude. Defined once so the headless test mode
+# below uses byte-for-byte the same string as the production handoff —
+# divergence here is the bug headless mode is supposed to catch.
+$HandoffPrompt = "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at $env:USERPROFILE\claude-starter-install.log."
+
 $claudeAvailable = Get-Command claude -ErrorAction SilentlyContinue
 if ($claudeAvailable) {
     if ($env:ELNORA_SKIP_HANDOFF -eq "1") {
@@ -904,12 +909,41 @@ if ($claudeAvailable) {
         Write-Host "ELNORA_SKIP_HANDOFF=1 set - would invoke claude with the Phase 2 prompt. Skipping for non-interactive run." -ForegroundColor Gray
         exit 0
     }
+
+    if ($env:ELNORA_HANDOFF_MODE -eq "headless") {
+        # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
+        # we can verify what Claude actually does after the handoff, not just
+        # that the handoff fired. Same prompt, same cwd as production — only
+        # the I/O wrapper changes (one-shot print mode + bypassPermissions
+        # because nobody's there to approve tool calls).
+        #
+        # Requires ANTHROPIC_API_KEY in env so claude skips browser OAuth.
+        # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
+        # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
+        # that branch explicitly).
+        $transcript = if ($env:ELNORA_HANDOFF_TRANSCRIPT) { $env:ELNORA_HANDOFF_TRANSCRIPT } else { Join-Path $env:USERPROFILE "handoff-transcript.jsonl" }
+        Write-Host "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $transcript)" -ForegroundColor Cyan
+        # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
+        # rejects the combo otherwise). --max-turns 50 caps a runaway loop;
+        # Phase 2 should fit comfortably under 30 turns.
+        & claude -p $HandoffPrompt `
+            --permission-mode bypassPermissions `
+            --output-format stream-json `
+            --verbose `
+            --max-turns 50 `
+          | Tee-Object -FilePath $transcript
+        $rc = $LASTEXITCODE
+        Write-Host ""
+        Write-Host "claude -p exited with code $rc (transcript saved to $transcript)" -ForegroundColor Cyan
+        exit $rc
+    }
+
     Write-Host "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup." -ForegroundColor White
     Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
     Write-Host ""
     # PowerShell has no `exec` — call claude as a child process and let it own
     # the terminal until it exits. Then the script exits cleanly.
-    & claude "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at $env:USERPROFILE\claude-starter-install.log."
+    & claude $HandoffPrompt
     exit 0
 }
 
