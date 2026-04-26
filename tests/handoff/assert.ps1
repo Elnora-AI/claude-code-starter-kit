@@ -110,6 +110,7 @@ if (Test-Path .git) {
     # newline) — and `Measure-Object -Line` on that returns 0, not 1, because
     # it counts newline-terminated lines. Split + filter empties so the count
     # is right whether there are 0, 1, or many remotes.
+    $remotes = git -C $RepoDir remote 2>$null
     $remoteList = @($remotes -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $remoteCount = $remoteList.Count
     if ($env:ELNORA_HANDOFF_REPO_NAME) {
