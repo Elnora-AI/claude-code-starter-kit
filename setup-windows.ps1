@@ -559,7 +559,9 @@ if (-not $elnoraIsInstalled) {
             }
         }
     }
-    Write-Host "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)." -ForegroundColor Gray
+    Write-Host "  Next: paste your API key when prompted in step [3/3] of the auth section below," -ForegroundColor Gray
+    Write-Host "        or run 'elnora auth login --api-key <key>' later. Get a key at" -ForegroundColor Gray
+    Write-Host "        https://platform.elnora.ai/settings (API Keys tab)." -ForegroundColor Gray
 } else {
     $currentElnoraVersion = (& elnora --version 2>$null)
     if (-not $currentElnoraVersion) { $currentElnoraVersion = "unknown" }
@@ -835,6 +837,11 @@ $cdtBlock = [pscustomobject]@{
     command = "cmd"
     args    = @("/c", "npx", "chrome-devtools-mcp@latest", "--autoConnect")
 }
+# BOM-less UTF-8 writer. Out-File / Set-Content with -Encoding utf8 on Windows
+# PowerShell 5.1 prepends a UTF-8 BOM (EF BB BF), and Node's JSON.parse — which
+# is what Claude Code's MCP host uses — rejects BOM-prefixed JSON. PS 7 already
+# defaults to BOM-less, so this stays correct on both.
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 try {
     if (Test-Path $mcpConfigPath) {
         # Merge: only touch the chrome-devtools entry, leave other servers alone.
@@ -843,13 +850,15 @@ try {
             $existing | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) -Force
         }
         $existing.mcpServers | Add-Member -NotePropertyName "chrome-devtools" -NotePropertyValue $cdtBlock -Force
-        $existing | ConvertTo-Json -Depth 10 | Out-File -FilePath $mcpConfigPath -Encoding utf8
+        $json = $existing | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($mcpConfigPath, $json, $utf8NoBom)
         Write-Host "[OK] Updated $mcpConfigPath with chrome-devtools (cmd /c npx) override" -ForegroundColor Green
     } else {
         $newConfig = [pscustomobject]@{
             mcpServers = [pscustomobject]@{ "chrome-devtools" = $cdtBlock }
         }
-        $newConfig | ConvertTo-Json -Depth 10 | Out-File -FilePath $mcpConfigPath -Encoding utf8
+        $json = $newConfig | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($mcpConfigPath, $json, $utf8NoBom)
         Write-Host "[OK] Created $mcpConfigPath with chrome-devtools (cmd /c npx) override" -ForegroundColor Green
     }
 } catch {
@@ -1156,13 +1165,24 @@ if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless"
             Write-Host "      [OK] Already authenticated."
         } else {
             Write-Host "      Not authenticated. Elnora uses an API key (not browser OAuth)."
-            Write-Host "      Get one at:  https://app.elnora.ai/settings/api-keys"
+            Write-Host "      Get one at:  https://platform.elnora.ai/settings (API Keys tab)"
             Write-Host "      [P]aste key now / [s]kip (Elnora MCP will prompt on first use)"
             $answer = Read-Host "      >"
             if ([string]::IsNullOrWhiteSpace($answer)) { $answer = "s" }
             switch -Regex ($answer) {
                 "^[Pp]" {
-                    $elnoraKey = Read-Host "      API key (starts with elnora_live_)"
+                    # -AsSecureString so the typed key isn't echoed to the
+                    # host. Start-Transcript captures host output into
+                    # ~/claude-starter-install.log, so a plain Read-Host
+                    # would leak the elnora_live_* key into the very file
+                    # the customer is told to share with support.
+                    $elnoraSecure = Read-Host "      API key (starts with elnora_live_)" -AsSecureString
+                    $elnoraBstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($elnoraSecure)
+                    try {
+                        $elnoraKey = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($elnoraBstr)
+                    } finally {
+                        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($elnoraBstr)
+                    }
                     if (-not [string]::IsNullOrWhiteSpace($elnoraKey)) {
                         elnora auth login --api-key $elnoraKey *>$null
                         if ($LASTEXITCODE -eq 0) {
@@ -1170,6 +1190,8 @@ if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless"
                         } else {
                             Write-Host "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
                         }
+                        # Best-effort scrub of the plaintext copy from memory.
+                        $elnoraKey = $null
                     } else {
                         Write-Host "      [SKIP] Empty key -- skipped."
                     }
@@ -1187,10 +1209,11 @@ Write-Host "==========================================="
 Write-Host "  Quick PATH note"
 Write-Host "==========================================="
 Write-Host ""
-Write-Host "  The 'claude' and 'elnora' commands are at %USERPROFILE%\.local\bin\."
+Write-Host "  'claude' is at %USERPROFILE%\.local\bin\ and 'elnora' is at"
+Write-Host "  %USERPROFILE%\.elnora\bin\."
 Write-Host "  - In any terminal opened AFTER this install: works automatically."
 Write-Host "  - In a terminal opened BEFORE this install (rare):"
-Write-Host "      `$env:Path = `"`$env:USERPROFILE\.local\bin;`$env:Path`""
+Write-Host "      `$env:Path = `"`$env:USERPROFILE\.local\bin;`$env:USERPROFILE\.elnora\bin;`$env:Path`""
 Write-Host "    or just open a fresh PowerShell window."
 Write-Host ""
 
@@ -1240,7 +1263,11 @@ if (($env:ELNORA_SKIP_HANDOFF -eq "1") -or ($env:ELNORA_HANDOFF_MODE -eq "headle
             # lines that are pure whitespace + a single brace.
             $cleaned = [regex]::Replace($cleaned, '(?m)^\s*[\{\}]\s*\r?\n', '')
             if ($cleaned -ne $raw) {
-                Set-Content -Path $LogFile -Value $cleaned -NoNewline
+                # Write BOM-less UTF-8 directly to avoid Set-Content's
+                # PS-5.1 default-encoding surprise (it picks the system
+                # codepage, which may not match what Start-Transcript
+                # produced and can corrupt the log on subsequent reads).
+                [System.IO.File]::WriteAllText($LogFile, $cleaned, [System.Text.UTF8Encoding]::new($false))
             }
         } catch {
             # Best-effort cleanup; never fail the script over a log polish.

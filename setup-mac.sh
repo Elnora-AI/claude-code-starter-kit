@@ -198,17 +198,20 @@ EOF
 # ------------------------------------------------------------
 # Runs a command with live output. On failure prints a structured FAILURE
 # box with the exit code, the exact command, the last 10 lines of captured
-# stderr, and a step-specific remediation hint.
+# output, and a step-specific remediation hint.
 #
-# Stream-splitting: the `{ ... } 3>&1` + tee trick lets us capture stderr
-# (for post-failure quoting) while still streaming stdout AND stderr live
-# to the terminal. PIPESTATUS[0] preserves the command's exit code through
-# the pipe (otherwise we'd get tee's exit code, which is always 0).
+# Stream handling: we merge stderr into stdout, then tee the merged stream
+# both to the capture file AND to fd 3 (the original stdout, i.e. the
+# terminal). That way the failure box quotes whatever the command actually
+# printed — important because brew, npm, curl, etc. emit their error
+# messages on stdout, not stderr, so capturing stderr alone left the box
+# empty for the most common failures. PIPESTATUS[0] preserves the command's
+# exit code through the pipe (otherwise we'd get tee's exit code, always 0).
 run_step() {
     local label="$1"; shift
     local errfile code
     errfile="$(mktemp 2>/dev/null)" || errfile="/tmp/claude-setup-err.$$"
-    { "$@" 2>&1 >&3 | tee "$errfile" >&2; code=${PIPESTATUS[0]}; } 3>&1
+    { "$@" 2>&1 | tee "$errfile" >&3; code=${PIPESTATUS[0]}; } 3>&1
     if [ "$code" -eq 0 ]; then
         rm -f "$errfile"
         return 0
@@ -219,7 +222,7 @@ run_step() {
     echo "  | Command:   $*" >&2
     if [ -s "$errfile" ]; then
         echo "  |" >&2
-        echo "  | Captured stderr (last 10 lines):" >&2
+        echo "  | Captured output (last 10 lines):" >&2
         tail -n 10 "$errfile" 2>/dev/null | sed 's/^/  |   /' >&2
     fi
     echo "  |" >&2
@@ -326,7 +329,9 @@ if ! command -v elnora &> /dev/null; then
         # this script is ever re-ordered.
         export PATH="$HOME/.local/bin:$PATH"
         echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed - restart terminal')"
-        echo "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)."
+        echo "  Next: paste your API key when prompted in step [3/3] of the auth section below,"
+        echo "        or run 'elnora auth login --api-key <key>' later. Get a key at"
+        echo "        https://platform.elnora.ai/settings (API Keys tab)."
     fi
 else
     current_elnora_version="$(elnora --version 2>/dev/null || echo 'unknown')"
@@ -438,28 +443,19 @@ if command -v node &> /dev/null; then
 fi
 if ! $node_major_ok; then
     echo "[4/10] Installing Node.js 22 LTS..."
-    # Suppress the ~200-line brew caveats dump (the "node@22 was installed but
-    # not linked because node@20 is already linked" warning + a wall of
-    # "==> Caveats" sections from node@22's dependency chain). The next line
-    # always runs `brew link --force --overwrite node@22`, which resolves the
-    # "not linked" condition - so the caveats are obsolete by the time the
-    # user reads them, and they read like a scary failure to a beginner.
-    # Capture brew's output to a tempfile and only echo it on failure;
-    # on success print a one-line confirmation. Keeps the success path
-    # quiet while preserving full diagnostic output when something breaks.
-    node_install_log="$(mktemp 2>/dev/null)" || node_install_log="/tmp/claude-setup-node.$$"
-    if run_step "Node.js" /bin/bash -c "brew install node@22 >\"$node_install_log\" 2>&1"; then
+    # Suppress brew's post-install hints (the "==> Caveats" wall and the
+    # "node@22 was installed but not linked..." warning). The next line
+    # always runs `brew link --force --overwrite node@22`, which resolves
+    # the "not linked" condition - so those caveats are obsolete by the
+    # time the user reads them, and they read like a scary failure to a
+    # beginner. HOMEBREW_NO_ENV_HINTS=1 trims them down without hiding
+    # genuine error output, so run_step's capture still has something
+    # meaningful to quote in the FAILURE box if the install fails.
+    if HOMEBREW_NO_ENV_HINTS=1 run_step "Node.js" brew install node@22; then
         brew link --force --overwrite node@22 &>/dev/null || true
         hash -r 2>/dev/null || true
         echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed - restart terminal')"
-    else
-        # On failure, surface the captured output so the FAILURE box has
-        # something to point at.
-        if [ -s "$node_install_log" ]; then
-            sed 's/^/    /' "$node_install_log" >&2
-        fi
     fi
-    rm -f "$node_install_log"
 else
     echo "[4/10] Node.js already installed: $(node --version). Skipping."
 fi
@@ -765,16 +761,16 @@ echo ""
 
 # Bypass entire auth section in CI / non-interactive modes.
 if [ "${ELNORA_SKIP_HANDOFF:-}" = "1" ] || [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
-    echo "  (Skipped — non-interactive run.)"
+    echo "  (Skipped - non-interactive run.)"
     echo ""
 else
     # ---- Claude auth ----
     echo "[1/3] Claude Code"
     if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-        echo "      ANTHROPIC_API_KEY set — using API key, skipping OAuth."
+        echo "      ANTHROPIC_API_KEY set - using API key, skipping OAuth."
     elif claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
         email=$(claude auth status --json 2>/dev/null | grep -o '"email"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
-        echo "      ✓ Already logged in as ${email:-unknown}"
+        echo "      [OK] Already logged in as ${email:-unknown}"
     else
         echo "      Not logged in. A browser will open so you can sign in."
         echo "      [Y]es / [s]kip+continue without Claude / [q]uit script"
@@ -784,14 +780,14 @@ else
             [Yy]*|"")
                 if claude auth login --claudeai; then
                     if claude auth status --json 2>/dev/null | grep -q '"loggedIn"[[:space:]]*:[[:space:]]*true'; then
-                        echo "      ✓ Logged in."
+                        echo "      [OK] Logged in."
                     else
-                        echo "      ✗ Login flow returned but auth status still shows not logged in."
+                        echo "      [FAIL] Login flow returned but auth status still shows not logged in."
                         echo "         Run manually:  claude auth login --claudeai"
                         exit 1
                     fi
                 else
-                    echo "      ✗ Login didn't complete. Re-run when ready:  bash setup-mac.sh"
+                    echo "      [FAIL] Login didn't complete. Re-run when ready:  bash setup-mac.sh"
                     exit 1
                 fi
                 ;;
@@ -802,7 +798,7 @@ else
   |                                                            |
   |   You skipped Claude Code login.                           |
   |                                                            |
-  |   That's fine — but Phase 2 (where Claude finishes setup)  |
+  |   That's fine - but Phase 2 (where Claude finishes setup)  |
   |   needs an authenticated session, so we can't continue     |
   |   right now.                                               |
   |                                                            |
@@ -811,7 +807,7 @@ else
   |     cd ~/Documents/elnora-starter-kit                      |
   |     bash setup-mac.sh                                      |
   |                                                            |
-  |   Re-running is safe — installs are skipped if already     |
+  |   Re-running is safe - installs are skipped if already     |
   |   present, and the script picks up at the auth step.       |
   |                                                            |
   +============================================================+
@@ -834,10 +830,10 @@ EOF
     # ---- GitHub auth ----
     echo "[2/3] GitHub CLI"
     if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]; then
-        echo "      GH_TOKEN/GITHUB_TOKEN set — skipping OAuth."
+        echo "      GH_TOKEN/GITHUB_TOKEN set - skipping OAuth."
     elif gh auth status >/dev/null 2>&1; then
         gh_user=$(gh api user --jq .login 2>/dev/null || echo "unknown")
-        echo "      ✓ Already logged in as $gh_user"
+        echo "      [OK] Already logged in as $gh_user"
     else
         echo "      Not logged in. Phase 2 needs this to create your starter repo."
         echo "      [Y]es / [s]kip (Phase 2 will prompt you again later)"
@@ -846,13 +842,13 @@ EOF
         case "${answer:-Y}" in
             [Yy]*|"")
                 if gh auth login --web --hostname github.com --git-protocol https; then
-                    echo "      ✓ Logged in."
+                    echo "      [OK] Logged in."
                 else
-                    echo "      ⚠ Login didn't complete. Phase 2 will prompt you."
+                    echo "      [WARN] Login didn't complete. Phase 2 will prompt you."
                 fi
                 ;;
             *)
-                echo "      ⊘ Skipped. To do later:  gh auth login --web"
+                echo "      [SKIP] To do later:  gh auth login --web"
                 ;;
         esac
     fi
@@ -861,31 +857,38 @@ EOF
     # ---- Elnora auth ----
     echo "[3/3] Elnora CLI"
     if [ -n "${ELNORA_API_KEY:-}" ]; then
-        echo "      ELNORA_API_KEY set — skipping prompt."
+        echo "      ELNORA_API_KEY set - skipping prompt."
     elif elnora auth status 2>/dev/null | grep -q '"authenticated"[[:space:]]*:[[:space:]]*true'; then
-        echo "      ✓ Already authenticated."
+        echo "      [OK] Already authenticated."
     else
         echo "      Not authenticated. Elnora uses an API key (not browser OAuth)."
-        echo "      Get one at:  https://app.elnora.ai/settings/api-keys"
+        echo "      Get one at:  https://platform.elnora.ai/settings (API Keys tab)"
         echo "      [P]aste key now / [s]kip (Elnora MCP will prompt on first use)"
         printf "      > "
         read -r answer
         case "${answer:-s}" in
             [Pp]*)
                 printf "      API key (starts with elnora_live_): "
-                read -r elnora_key
+                # `read -s` so the key isn't echoed to the terminal — and
+                # therefore not captured by the `tee "$LOG_FILE"` redirect
+                # at the top of the script. Otherwise the customer's
+                # elnora_live_* key ends up in ~/claude-starter-install.log,
+                # which is exactly the file they're encouraged to share with
+                # support if anything goes wrong.
+                read -rs elnora_key
+                printf "\n"
                 if [ -n "$elnora_key" ]; then
                     if elnora auth login --api-key "$elnora_key" >/dev/null 2>&1; then
-                        echo "      ✓ Saved."
+                        echo "      [OK] Saved."
                     else
-                        echo "      ✗ Login failed. Try manually:  elnora auth login --api-key <key>"
+                        echo "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
                     fi
                 else
-                    echo "      ⊘ Empty key — skipped."
+                    echo "      [SKIP] Empty key."
                 fi
                 ;;
             *)
-                echo "      ⊘ Skipped. To do later:  elnora auth login --api-key <key>"
+                echo "      [SKIP] To do later:  elnora auth login --api-key <key>"
                 ;;
         esac
     fi
@@ -897,8 +900,8 @@ echo "  Quick PATH note"
 echo "==========================================="
 echo ""
 echo "  The 'claude' and 'elnora' commands are at ~/.local/bin/."
-echo "  • In any terminal opened AFTER this install: works automatically."
-echo "  • In a terminal opened BEFORE this install (rare):"
+echo "  - In any terminal opened AFTER this install: works automatically."
+echo "  - In a terminal opened BEFORE this install (rare):"
 echo "      export PATH=\"\$HOME/.local/bin:\$PATH\""
 echo "    or just open a fresh terminal window."
 echo ""

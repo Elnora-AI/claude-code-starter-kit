@@ -29,12 +29,17 @@ Examples:
 
 ## Gitignore rules
 
-The root `.gitignore` already excludes `cache/`. If you need to commit a
-specific file from this folder, add a negation rule:
+The root `.gitignore` already excludes everything inside `cache/` (with
+`cache/*`, which keeps the directory tracked but ignores its contents). If
+you need to commit a specific file from this folder, add a negation rule
+in the **same form** the existing rules use:
 
 ```
-cache/
+cache/*
 !cache/README.md
 !cache/.gitkeep
 !cache/your-file-to-commit.json
 ```
+
+Don't switch to plain `cache/` — that would ignore the whole directory and
+the negations wouldn't bring files back.
