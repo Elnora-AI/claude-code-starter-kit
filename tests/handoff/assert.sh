@@ -75,13 +75,47 @@ if [ -d .git ]; then
     else
         fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
     fi
-    # In headless mode the GitHub bootstrap is skipped — there should be NO
-    # remotes. (Interactive mode adds 'origin'; CI never runs interactive.)
+    # Two branches based on whether the workflow provisioned a PAT and
+    # asked the agent to do the GitHub bootstrap.
     remote_count=$(git -C "$REPO_DIR" remote 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$remote_count" -eq 0 ]; then
-        ok "no git remotes configured (expected in headless mode — GitHub bootstrap was skipped)"
+    if [ -n "${ELNORA_HANDOFF_REPO_NAME:-}" ]; then
+        # PAT path — expect exactly one remote 'origin' pointing at the
+        # CI-named repo, with HEAD == origin/main and visibility = PRIVATE.
+        if [ "$remote_count" -eq 1 ] && [ "$(git -C "$REPO_DIR" remote)" = "origin" ]; then
+            ok "exactly one remote 'origin' configured"
+        else
+            fail "expected exactly one remote 'origin', found $remote_count: $(git -C "$REPO_DIR" remote | tr '\n' ' ')"
+        fi
+        origin_url=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "")
+        case "$origin_url" in
+            *"/$ELNORA_HANDOFF_REPO_NAME"*|*"/$ELNORA_HANDOFF_REPO_NAME.git"*)
+                ok "origin URL contains repo name '$ELNORA_HANDOFF_REPO_NAME' ($origin_url)"
+                ;;
+            *)
+                fail "origin URL does not reference '$ELNORA_HANDOFF_REPO_NAME': got '$origin_url'"
+                ;;
+        esac
+        local_head=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "")
+        remote_head=$(git -C "$REPO_DIR" rev-parse origin/main 2>/dev/null || echo "")
+        if [ -n "$local_head" ] && [ "$local_head" = "$remote_head" ]; then
+            ok "local HEAD matches origin/main ($local_head)"
+        else
+            fail "local HEAD ($local_head) != origin/main ($remote_head)"
+        fi
+        # `gh repo view` needs auth. The agent ran `gh auth login --with-token`
+        # earlier, so gh's config already has the token persisted on this runner.
+        if visibility=$(gh repo view "$ELNORA_HANDOFF_REPO_NAME" --json visibility --jq .visibility 2>/dev/null) && [ "$visibility" = "PRIVATE" ]; then
+            ok "GitHub repo $ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE"
+        else
+            fail "expected GitHub repo $ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE, got '${visibility:-<unreachable>}'"
+        fi
     else
-        fail "expected 0 remotes in headless mode, found $remote_count: $(git -C "$REPO_DIR" remote | tr '\n' ' ')"
+        # Legacy headless path — no PAT provisioned, GitHub bootstrap skipped.
+        if [ "$remote_count" -eq 0 ]; then
+            ok "no git remotes configured (expected — GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
+        else
+            fail "expected 0 remotes (no PAT provisioned), found $remote_count: $(git -C "$REPO_DIR" remote | tr '\n' ' ')"
+        fi
     fi
 else
     fail ".git directory was not created"
