@@ -1,0 +1,257 @@
+name: bootstrap-e2e
+
+# True one-liner end-to-end test — `install.sh` (or `install.ps1`) is the
+# real entry point users hit via:
+#
+#   curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
+#   irm  https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
+#
+# What handoff-e2e.yml proves:    setup-mac.sh / setup-windows.ps1 → claude Phase 2 works.
+# What install-smoke-test proves: setup-mac.sh / setup-windows.ps1 install Phase 1 cleanly.
+# What THIS workflow proves:      install.{sh,ps1} → setup → claude Phase 2 chain works
+#                                 from a single user command, end to end.
+#
+# Strategy: pre-populate the install target dir with the checked-out repo,
+# then invoke install.{sh,ps1} directly. install.{sh,ps1} sees the dir
+# already exists, skips its tarball/zip download, and runs setup. This
+# tests the chain mechanics on the current branch without depending on
+# the tarball already being on main (chicken-and-egg-free for PR validation).
+#
+# A separate full-tarball-fetch test would only validate changes already
+# merged to main; if you need that, dispatch this workflow against main
+# AFTER merging — it's deterministic, just doesn't cover the GitHub
+# archive-fetch path.
+#
+# Manual-only (workflow_dispatch). Uses the same secrets as handoff-e2e.
+# Public-repo defenses identical: workflow_dispatch only, transcript scrub
+# regex, 7-day retention, contents:read permissions.
+#
+# The workflow_dispatch `os` input is a `choice` restricted to
+# {both, macos, windows}, only used in `if:` expressions — no shell
+# interpolation, no injection surface.
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "Which OS to run on"
+        type: choice
+        default: "both"
+        options:
+          - both
+          - macos
+          - windows
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS bootstrap E2E
+    if: github.event.inputs.os == 'both' || github.event.inputs.os == 'macos'
+    runs-on: macos-14
+    timeout-minutes: 25
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
+      ELNORA_HANDOFF_MODE: headless
+      # Same pin reasoning as handoff-e2e.yml — pin in CI only, never in
+      # scripts. Bump when cutting a new Elnora CLI release.
+      ELNORA_CLI_VERSION: v1.5.0
+      ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify required secrets are present
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then echo "::error::ANTHROPIC_API_KEY secret is not set"; exit 1; fi
+          if [ -z "$ELNORA_API_KEY" ]; then echo "::error::ELNORA_API_KEY_TEST secret is not set"; exit 1; fi
+          case "$ANTHROPIC_API_KEY" in sk-ant-*) ;; *) echo "::error::ANTHROPIC_API_KEY does not start with sk-ant-"; exit 1 ;; esac
+          case "$ELNORA_API_KEY"   in elnora_live_*) ;; *) echo "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"; exit 1 ;; esac
+
+      - name: Pre-set git config (skip Read prompts)
+        run: |
+          git config --global user.name "Bootstrap E2E"
+          git config --global user.email "bootstrap-e2e@elnora-starter-kit.test"
+
+      - name: Stage fake Obsidian vault for KB auto-detect
+        run: |
+          mkdir -p "$HOME/Documents/test-vault/.obsidian"
+          echo "# Test vault" > "$HOME/Documents/test-vault/README.md"
+
+      - name: Pre-populate install target with checkout (skip GitHub tarball fetch)
+        # install.sh's `if [ -d "$TARGET_DIR" ]` branch fires when the dir
+        # exists, skipping the tarball download. We use that path to test
+        # the rest of the chain (exec to setup-mac.sh → claude -p) on the
+        # current branch without depending on the tarball being current on
+        # main. The tarball-fetch path is manually verifiable by removing
+        # the dir before re-running, but isn't this workflow's concern.
+        run: |
+          mkdir -p "$HOME/Documents"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.env' \
+            --exclude='.claude/settings.local.json' \
+            --exclude='.claude/knowledge-base.local.md' \
+            --exclude='handoff-transcript.jsonl' \
+            "$GITHUB_WORKSPACE/" "$HOME/Documents/elnora-starter-kit/"
+          echo "--- contents of pre-populated dir ---"
+          # find instead of `ls | head` so shellcheck SC2012 doesn't fire.
+          find "$HOME/Documents/elnora-starter-kit" -maxdepth 1 -mindepth 1 | head -20
+
+      - name: Run install.sh (full one-liner chain)
+        # install.sh -> setup-mac.sh -> claude -p (headless because env is set)
+        # -> Phase 2 -> HANDOFF_COMPLETE. install.sh's /dev/tty redirect now
+        # has a fallback for non-tty environments (this CI runner), so the
+        # bootstrap doesn't abort before reaching setup-mac.sh.
+        run: |
+          chmod +x install.sh
+          bash install.sh
+
+      - name: Scrub secrets from transcript (PUBLIC REPO defense)
+        if: always()
+        run: |
+          if [ ! -f "$ELNORA_HANDOFF_TRANSCRIPT" ]; then echo "(no transcript)"; exit 0; fi
+          python3 - "$ELNORA_HANDOFF_TRANSCRIPT" <<'PY'
+          import re, sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          s = p.read_text()
+          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***',     s)
+          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***', s)
+          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***',         s)
+          p.write_text(s)
+          print(f"Scrubbed transcript: {len(s)} bytes")
+          PY
+
+      - name: Show install log
+        if: always()
+        run: |
+          echo "=== ~/claude-starter-install.log (tail 200) ==="
+          tail -200 "$HOME/claude-starter-install.log" 2>/dev/null || echo "(log not produced)"
+
+      - name: Show handoff transcript (tail, scrubbed)
+        if: always()
+        run: |
+          echo "=== handoff-transcript.jsonl (tail 50, post-scrub) ==="
+          tail -50 "$ELNORA_HANDOFF_TRANSCRIPT" 2>/dev/null || echo "(transcript not produced)"
+
+      - name: Run post-state assertions
+        if: always()
+        run: |
+          # Assertions run against the install target dir (where install.sh
+          # placed the kit), NOT the checkout. The checkout is just the
+          # source we rsync'd from.
+          chmod +x "$GITHUB_WORKSPACE/tests/handoff/assert.sh"
+          "$GITHUB_WORKSPACE/tests/handoff/assert.sh" \
+            "$HOME/Documents/elnora-starter-kit" \
+            "$ELNORA_HANDOFF_TRANSCRIPT"
+
+      - name: Upload transcript as artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bootstrap-transcript-macos
+          path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows:
+    name: Windows bootstrap E2E
+    if: github.event.inputs.os == 'both' || github.event.inputs.os == 'windows'
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
+      ELNORA_HANDOFF_MODE: headless
+      ELNORA_CLI_VERSION: v1.5.0
+      ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}\handoff-transcript.jsonl
+      # windows-2022 runners ship without winget; skip optional installs that
+      # need it. Same rationale as install-smoke-test.yml + handoff-e2e.yml.
+      ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify required secrets are present
+        shell: pwsh
+        run: |
+          if (-not $env:ANTHROPIC_API_KEY) { Write-Host "::error::ANTHROPIC_API_KEY secret is not set"; exit 1 }
+          if (-not $env:ELNORA_API_KEY)    { Write-Host "::error::ELNORA_API_KEY_TEST secret is not set"; exit 1 }
+          if ($env:ANTHROPIC_API_KEY -notlike "sk-ant-*")    { Write-Host "::error::ANTHROPIC_API_KEY does not start with sk-ant-"; exit 1 }
+          if ($env:ELNORA_API_KEY    -notlike "elnora_live_*") { Write-Host "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"; exit 1 }
+
+      - name: Pre-set git config (skip Read prompts)
+        shell: pwsh
+        run: |
+          git config --global user.name "Bootstrap E2E"
+          git config --global user.email "bootstrap-e2e@elnora-starter-kit.test"
+
+      - name: Stage fake Obsidian vault for KB auto-detect
+        shell: pwsh
+        run: |
+          $vault = Join-Path $env:USERPROFILE "Documents\test-vault\.obsidian"
+          New-Item -ItemType Directory -Force -Path $vault | Out-Null
+          Set-Content -Path (Join-Path $env:USERPROFILE "Documents\test-vault\README.md") -Value "# Test vault"
+
+      - name: Pre-populate install target with checkout (skip GitHub zip fetch)
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
+          New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+          # robocopy /MIR mirrors the source dir. Exit codes 0..7 are success
+          # (copies, mismatches, extras); 8+ is real failure. /XD/.XF exclude
+          # files+dirs we don't want carried over.
+          robocopy "$env:GITHUB_WORKSPACE" "$target" /MIR /XD .git node_modules /XF .env handoff-transcript.jsonl
+          if ($LASTEXITCODE -ge 8) { Write-Host "::error::robocopy failed with exit $LASTEXITCODE"; exit 1 }
+          $global:LASTEXITCODE = 0
+          Write-Host "--- pre-populated dir ---"
+          Get-ChildItem $target | Select-Object -First 20
+
+      - name: Run install.ps1 (full one-liner chain)
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          .\install.ps1
+
+      - name: Scrub secrets from transcript (PUBLIC REPO defense)
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:ELNORA_HANDOFF_TRANSCRIPT)) { Write-Host "(no transcript)"; exit 0 }
+          $s = Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Raw
+          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***')
+          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***')
+          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***')
+          Set-Content -Path $env:ELNORA_HANDOFF_TRANSCRIPT -Value $s -NoNewline
+          Write-Host "Scrubbed transcript"
+
+      - name: Show install log
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== claude-starter-install.log (tail 200) ==="
+          $log = "$env:USERPROFILE\claude-starter-install.log"
+          if (Test-Path $log) { Get-Content $log -Tail 200 } else { Write-Host "(log not produced)" }
+
+      - name: Show handoff transcript (tail, scrubbed)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== handoff-transcript.jsonl (tail 50, post-scrub) ==="
+          if (Test-Path $env:ELNORA_HANDOFF_TRANSCRIPT) { Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Tail 50 } else { Write-Host "(transcript not produced)" }
+
+      - name: Run post-state assertions
+        if: always()
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
+          & "$env:GITHUB_WORKSPACE\tests\handoff\assert.ps1" -RepoDir $target -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
+
+      - name: Upload transcript as artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bootstrap-transcript-windows
+          path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
+          if-no-files-found: warn
+          retention-days: 7
