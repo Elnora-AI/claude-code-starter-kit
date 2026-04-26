@@ -53,6 +53,7 @@ Wired directly via `.mcp.json` (project-scoped, not plugin-provided):
 | **context7** | `https://mcp.context7.com/mcp` | Same as above, available even without the plugin installed |
 | **grep** | `https://mcp.grep.app` | Semantic code search across public repos |
 | **elnora** | `https://mcp.elnora.ai/mcp` | Elnora platform tools — bioprotocol generation, task/file/project management. OAuth 2.1 browser flow on first use (no manual config). |
+| **chrome-devtools** | `npx chrome-devtools-mcp@latest --autoConnect` | Take over your real Chrome via the Chrome DevTools Protocol — list tabs, navigate, screenshot, run JS, read network/console, run Lighthouse. Setup + recipes in [`docs/chrome-devtools-mcp-setup.md`](docs/chrome-devtools-mcp-setup.md). Requires Chrome 144+ running. Windows users: `setup-windows.ps1` writes a user-level override that wraps `npx` in `cmd /c`. |
 
 _Add project-specific MCP servers to `.mcp.json` as needed._
 
