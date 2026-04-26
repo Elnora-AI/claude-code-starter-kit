@@ -1,138 +1,127 @@
 # Elnora Starter Kit
 
-Batteries-included setup for [Elnora AI](https://elnora.ai), the platform for
-generating, optimizing, and managing bioprotocols for wet-lab experiments.
+One-command setup that installs and connects [Elnora AI](https://elnora.ai),
+Claude Code, Python, Node.js, and supporting dev tools into a single
+workflow for generating preclinical lab protocols. Targeted at users who have not used a
+terminal before.
 
-This kit is for **lab scientists and customers who have never coded before**.
-You paste one command into your terminal, walk away, and end up with a
-working setup: Claude Code installed and authenticated, dev tools in place,
-the Elnora CLI working, and a Claude session waiting to help you generate
-your first protocol.
+## Requirements
 
-If something is already installed on your machine, the kit skips it. If
-something is missing, the kit installs it. Everything is logged, every step
-is announced, and there's a recovery path for anything that fails.
+- macOS or Windows 10/11
+- Active Claude Pro or Max subscription ([upgrade](https://claude.com/upgrade))
+- Elnora API key ([platform.elnora.ai/settings](https://platform.elnora.ai/settings))
 
-## Quick start
+## Install
 
-### macOS (Terminal)
-
-Open Terminal (⌘+Space → "Terminal" → Enter), then paste:
+**macOS** — open Terminal and run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
 ```
 
-### Windows (PowerShell)
-
-Open PowerShell (Start menu → "PowerShell" → Enter), then paste:
+**Windows** — open PowerShell and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
 ```
 
-That's it. The total flow takes about 10–15 minutes the first time.
+Total runtime: 10–15 minutes on a fresh machine.
 
-## What happens next
+## Install flow
 
-1. **Phase 1 — script (~5–10 min, automatic).** The kit downloads itself
-   into `~/Documents/elnora-starter-kit/`, then runs `setup-mac.sh` /
-   `setup-windows.ps1`. These install (skipping anything already present):
-   Claude Code, the Elnora CLI, Node.js, Git, Python, VS Code, GitHub CLI,
-   and Obsidian. Everything is logged to `~/claude-starter-install.log`.
+1. **Phase 1 — automated install (~5–10 min).** Clones the repo to
+   `~/Documents/elnora-starter-kit/` and runs `setup-mac.sh` or
+   `setup-windows.ps1`. Installs Claude Code, the Elnora CLI, Node.js, Git,
+   Python, VS Code, GitHub CLI, and Obsidian. Existing installations are
+   detected and skipped. Output is written to `~/claude-starter-install.log`.
+2. **Claude authentication.** A browser window opens for Claude Pro/Max
+   login.
+3. **Phase 2 — agent handoff (~3–5 min).** Claude follows
+   [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md): verifies installed
+   versions, prompts for the Elnora API key, runs a smoke test, and
+   optionally configures an Obsidian knowledge base.
+4. **Verification.** Claude generates a sample protocol to confirm the
+   end-to-end setup.
 
-2. **Browser pops up** for Claude login. Use your existing Claude Pro/Max
-   subscription. If you don't have one, visit `https://claude.com/upgrade`
-   first.
-
-3. **Phase 2 — Claude takes over (~3–5 min, interactive).** Claude reads
-   [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md), verifies what's
-   installed, walks you through getting your Elnora API key from
-   `https://platform.elnora.ai/settings`, runs a smoke test, and (optionally)
-   sets up your Obsidian vault.
-
-4. **Done.** Claude offers to generate a sample protocol so you can see
-   Elnora in action.
-
-## What's inside
+## Repository layout
 
 ```
 elnora-starter-kit/
-├── README.md                              # You are here
-├── INSTALL_FOR_AGENTS.md                  # Phase 2 sequence Claude follows
-├── RECOVERY.md                            # Common failures + 1-paragraph fixes
-├── CLAUDE.md                              # Project instructions Claude reads automatically
-├── TOOLS.md                               # Catalog of tools, plugins, integrations
+├── README.md                              # This file
+├── INSTALL_FOR_AGENTS.md                  # Phase 2 sequence executed by Claude
+├── RECOVERY.md                            # Failure modes and remediation steps
+├── CLAUDE.md                              # Project instructions loaded by Claude
+├── TOOLS.md                               # Installed tools, plugins, and integrations
 ├── marketplace-plugins.md                 # Recommended plugin marketplaces
-├── install.sh / install.ps1               # One-liner bootstraps
-├── setup-mac.sh / setup-windows.ps1       # Full Phase 1 setup scripts
-├── .env.template                          # Just ELNORA_API_KEY= — copy to .env
-├── .mcp.json                              # MCP servers (context7, grep, elnora)
-├── .gitignore                             # Keeps secrets and build artifacts out of Git
+├── install.sh / install.ps1               # Bootstrap entry points
+├── setup-mac.sh / setup-windows.ps1       # Phase 1 setup scripts
+├── .env.template                          # ELNORA_API_KEY placeholder
+├── .mcp.json                              # MCP server configuration
+├── .gitignore
 ├── LICENSE                                # MIT
 ├── .claude/
 │   ├── settings.json                      # Plugins, permissions, env defaults
-│   └── knowledge-base.local.md.template   # Per-user knowledge-base config (gitignored once filled in)
+│   └── knowledge-base.local.md.template   # Per-user knowledge-base config
 ├── docs/
-│   └── getting-started.md                 # Manual fallback flow if the agent path fails
+│   └── getting-started.md                 # Manual setup fallback
 └── .github/
-    ├── dependabot.yml                     # Weekly dep updates (github-actions, npm, pip)
-    └── workflows/codeql.yml               # CodeQL scans workflow files weekly
+    ├── dependabot.yml                     # Weekly dependency updates
+    └── workflows/codeql.yml               # Weekly CodeQL scans
 ```
 
-## After install
+## Post-install
 
-The install script disconnects this kit's upstream link so it becomes **your
-own repo**. The original Elnora upstream is preserved as `elnora-upstream`
-(run `git remote -v` to confirm), so you can `git fetch elnora-upstream`
-later if you want updates.
+The install script removes the original upstream remote and preserves it as
+`elnora-upstream`. The cloned directory is now an independent repository.
+Verify with `git remote -v`. To pull future updates from the starter kit:
 
-When you're ready to push to GitHub, ask Claude or run:
+```bash
+git fetch elnora-upstream
+```
+
+To publish your repo to GitHub:
 
 ```bash
 gh repo create my-lab-repo --private --source=. --push
 ```
 
-## Knowledge base (optional but recommended)
+## Knowledge base (optional)
 
-Plug Claude into an Obsidian vault (or any local folder) to give it access
-to your notes. Claude will offer to set this up during Phase 2 — it
-auto-detects existing vaults in iCloud, Google Drive, OneDrive, Dropbox, and
-Documents. See `CLAUDE.md` → "Knowledge Base" for details.
+The kit can connect Claude to a local knowledge base (Obsidian vault or any
+directory). During Phase 2, Claude auto-detects vaults in iCloud, Google
+Drive, OneDrive, Dropbox, and `~/Documents`. Configuration is stored in
+`.claude/knowledge-base.local.md` (gitignored). See `CLAUDE.md` →
+"Knowledge Base".
 
-## If something goes wrong
+## Troubleshooting
 
-See [`RECOVERY.md`](RECOVERY.md) — the top 5 failure modes, each with a
-1-paragraph fix. If your problem isn't there, send
-`~/claude-starter-install.log` to whoever is supporting you.
+Common failures and fixes are documented in [`RECOVERY.md`](RECOVERY.md).
+For unresolved issues, attach `~/claude-starter-install.log` when requesting
+support.
 
-## Manual fallback
+## Manual setup
 
-If the agent flow doesn't work for you (no Claude Pro/Max, agent install
-failed, etc.), `docs/getting-started.md` has the older 12-step manual flow
-that gets you to the same place.
+If the automated flow is unavailable (no Claude Pro/Max, install failure),
+`docs/getting-started.md` documents the equivalent manual procedure.
 
-## Defaults set in `.claude/settings.json`
+## Configuration
 
-Under the `env` block:
-- `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — enables Claude Code's
-  multi-agent teams feature.
-- `CLAUDE_CODE_NO_FLICKER=1` — enables [full-screen
-  mode](https://code.claude.com/docs/en/fullscreen).
+Defaults enabled in `.claude/settings.json`:
 
-To turn either off, edit `.claude/settings.json` and delete the line you
-don't want, or set its value to `"0"`.
+- `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` — enables [multi-agent teams](https://code.claude.com/docs/en/agent-teams).
+- `env.CLAUDE_CODE_NO_FLICKER=1` — enables [full-screen mode](https://code.claude.com/docs/en/fullscreen).
+- `autoUpdatesChannel: "latest"` — opts into the [auto-update](https://code.claude.com/docs/en/setup#auto-updates) `latest` channel (new features as soon as released). Switch to `"stable"` for ~1-week-old builds. Ignored for Homebrew/WinGet/apt/dnf/apk installs (upgrade via the package manager).
+- `remoteControlAtStartup: true` — auto-enables [Remote Control](https://code.claude.com/docs/en/remote-control) on every interactive session, so you can pick up any session from claude.ai/code or the Claude mobile app. Set to `false` to require an explicit `claude remote-control` / `--remote-control` / `/remote-control` invocation.
 
-## Powered by Elnora AI
+Remove the line or set the value to `"0"` / `false` to disable.
 
-Pre-installed and pre-wired by the setup script:
+## Elnora components
 
-- [Elnora CLI](https://cli.elnora.ai) (`elnora` command, available globally)
-- [`elnora-plugins`](https://github.com/Elnora-AI/elnora-plugins) marketplace
-- Elnora MCP server in `.mcp.json` (`https://mcp.elnora.ai/mcp`)
+Pre-installed and configured by the setup script:
 
-[Elnora](https://elnora.ai) is an AI platform for generating, optimizing, and
-managing bioprotocols for wet-lab experiments.
+- [Elnora CLI](https://cli.elnora.ai) — `elnora` command, available globally
+- [`elnora-plugins`](https://github.com/Elnora-AI/elnora-plugins) — plugin marketplace
+- Elnora MCP server — configured in `.mcp.json` (`https://mcp.elnora.ai/mcp`)
 
 ## License
 
