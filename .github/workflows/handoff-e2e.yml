@@ -171,6 +171,13 @@ jobs:
 
       - name: Run post-state assertions
         if: always()
+        env:
+          # Pass the PAT through so `gh repo view` in assert.sh can read
+          # the test repo's visibility. Without this, gh has no auth
+          # context (the agent's `gh auth login --with-token` happened in
+          # a subprocess whose persisted hosts.yml may not be visible
+          # here) and the visibility check returns <unreachable>.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
         run: |
           chmod +x tests/handoff/assert.sh
           tests/handoff/assert.sh "$PWD" "$ELNORA_HANDOFF_TRANSCRIPT"
@@ -329,6 +336,10 @@ jobs:
       - name: Run post-state assertions
         if: always()
         shell: pwsh
+        env:
+          # See matching comment in macOS job — give assert.ps1's
+          # `gh repo view` a token to read the test repo's visibility.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
         run: |
           .\tests\handoff\assert.ps1 -RepoDir $PWD -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
 
