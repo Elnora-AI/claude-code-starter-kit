@@ -472,7 +472,13 @@ if (-not (Get-Command elnora -ErrorAction SilentlyContinue)) {
     # iex evaluates a string in caller scope and ignores trailing -Version
     # because iex itself has no such param; converting to a scriptblock first
     # honors the installer's `param([string]$Version)` declaration.
-    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://cli.elnora.ai/install.ps1').Content)) -Version '$elnoraCliVersion'" }
+    #
+    # Use Invoke-RestMethod (not Invoke-WebRequest). IRM auto-decodes text
+    # responses to a string. IWR returns a `Response.Content` that is a byte[]
+    # for some content types (including what cli.elnora.ai serves install.ps1
+    # as), and `[scriptblock]::Create($byteArray)` then chokes trying to parse
+    # decimal byte values like "35 32 69 108..." as PowerShell syntax.
+    Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & ([scriptblock]::Create((Invoke-RestMethod 'https://cli.elnora.ai/install.ps1'))) -Version '$elnoraCliVersion'" }
     Update-SessionPath
 
     # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
