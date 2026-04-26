@@ -101,7 +101,7 @@ if (Test-Path .git) {
     if ($remoteCount -eq 0) {
         Assert-Ok "no git remotes configured (expected in headless mode — GitHub bootstrap was skipped)"
     } else {
-        Assert-Fail "expected 0 remotes in headless mode, found $remoteCount: $($remotes -join ' ')"
+        Assert-Fail "expected 0 remotes in headless mode, found ${remoteCount}: $($remotes -join ' ')"
     }
     $global:LASTEXITCODE = 0
 } else {
