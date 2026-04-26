@@ -11,10 +11,12 @@ name: install-smoke-test
 #   - No GUI: can't test browser auth, VS Code PATH cache, or Xcode CLT dialog.
 #   - No corporate Group Policy, no antivirus interference.
 #   - Read-Host prompts would hang; we pre-set git config to avoid one.
-#   - The windows-2022 runner does NOT include winget by default, so this
-#     smoke test cannot validate winget-based steps (Node/Git/Python/VS Code/
-#     gh/Obsidian on Windows). Real Win10/11 attendees have winget pre-installed
-#     via App Installer. To test winget paths, use a real Windows VM (Option C).
+#   - Neither windows-2022 nor windows-2025 runners include winget by default
+#     (they ship Chocolatey instead — winget runs on App Installer, a Microsoft
+#     Store package only available on Win10/11 consumer SKUs, not Windows
+#     Server). Real Win10/11 attendees have winget pre-installed. To test the
+#     winget paths in CI we install winget via the Cyberboss/install-winget
+#     action (pinned by SHA) before invoking setup-windows.ps1.
 #   - Shared CI runner IP pools routinely exhaust the GitHub API's 60/hour
 #     unauthenticated rate limit. setup-mac.sh and setup-windows.ps1 work
 #     around this by pinning the Elnora CLI version, which bypasses the
@@ -92,6 +94,12 @@ jobs:
         run: |
           git config --global user.name "CI Smoke Test"
           git config --global user.email "ci@elnora-starter-kit.test"
+
+      - name: Install winget (not pre-installed on windows-* runners)
+        # Pinned by SHA (v1.2.0) for security; bump SHA when upgrading.
+        # Action source audited: composite action that uses Microsoft's
+        # documented Add-AppxPackage flow to install winget on Windows Server.
+        uses: Cyberboss/install-winget@fc922bc7e0adb16f39ceab057cb2af88bd3799e1
 
       - name: Run setup-windows.ps1 with handoff skipped
         shell: pwsh
