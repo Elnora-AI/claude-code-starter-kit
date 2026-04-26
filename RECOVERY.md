@@ -87,7 +87,74 @@ If it still fails with a real key, the network may be blocking
 
 ---
 
-## 5. "The setup script half-failed"
+## 5. "GitHub auth fails" (Phase 2 step 6b)
+
+**Symptom:** Claude is walking you through `gh auth login` and something
+goes wrong — the browser doesn't open, the one-time code expired, or
+`gh auth status` keeps reporting "not logged in" after you finished the
+flow.
+
+**Fix — pick the matching scenario:**
+
+- **Browser doesn't open / your network blocks `github.com` OAuth.** Fall
+  back to a personal access token. Create one at
+  `https://github.com/settings/tokens?type=beta` with `repo` and `workflow`
+  scope, then:
+  ```
+  echo <your-token> | gh auth login --hostname github.com --git-protocol https --with-token
+  ```
+- **One-time code expired.** Just re-run:
+  ```
+  gh auth login --hostname github.com --git-protocol https --web
+  ```
+- **Wrong GitHub account selected in the browser.** Log out and start fresh:
+  ```
+  gh auth logout --hostname github.com
+  gh auth login --hostname github.com --git-protocol https --web
+  ```
+- **`gh auth status` keeps saying "not logged in" after a successful flow.**
+  Check that `~/.config/gh/hosts.yml` exists and is readable. On locked-down
+  corporate machines the config dir may be unwriteable; ask IT or run from
+  a personal account.
+
+Once `gh auth status` reports "Logged in to github.com" with
+`git_protocol: https`, tell Claude "I'm logged in" and it'll continue from
+where it stopped.
+
+---
+
+## 6. "GitHub repo creation fails" (Phase 2 step 6c)
+
+**Symptom:** `gh repo create` errors out, or the repo is created but the
+push didn't land on `origin/main`.
+
+**Fix:**
+
+- **`name already exists on this account`.** Pick a different name and tell
+  Claude. `gh repo create` doesn't partially create state, so retries are
+  safe. Suggestions: `<your-username>-agents-2`, `<your-username>-elnora`,
+  `<your-username>-lab`.
+- **`permission denied` pushing to the new repo.** The `gh` token is
+  missing the `repo` scope. Refresh it:
+  ```
+  gh auth refresh -s repo
+  ```
+- **Push appeared to succeed but `git rev-parse HEAD` doesn't match
+  `git rev-parse origin/main`.** Push explicitly:
+  ```
+  git push -u origin main
+  ```
+  If that fails with `non-fast-forward`, the GitHub repo was pre-seeded
+  (e.g. you accidentally added a README from the web UI). The cleanest fix
+  is to delete and recreate from the same local state:
+  ```
+  gh repo delete <repo-name> --yes
+  gh repo create <repo-name> --private --source=. --push
+  ```
+
+---
+
+## 7. "The setup script half-failed"
 
 **Symptom:** the script finished but printed `⚠ N step(s) failed — remediation
 below`. Some tools are installed, others aren't.

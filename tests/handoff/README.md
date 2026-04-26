@@ -18,7 +18,9 @@ After the headless handoff completes, `assert.sh` / `assert.ps1` verifies:
    contains `api_key = "elnora_live_…"`, AND `elnora auth status` returns
    success — i.e. Claude actually authenticated the CLI, not just dropped
    a useless `.env` file the CLI doesn't read.
-2. `.git/` exists and `git remote get-url elnora-upstream` resolves.
+2. `.git/` exists with at least one commit on `main`, and `git remote` is
+   empty (headless mode skips the GitHub bootstrap on purpose — no
+   credentials, no browser).
 3. `.claude/knowledge-base.local.md` was created and the placeholder is gone.
 4. The `### First-run setup` block in `CLAUDE.md` was self-deleted.
 5. The transcript contains the `HANDOFF_COMPLETE` marker.

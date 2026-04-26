@@ -9,8 +9,10 @@ You are Claude (or another agent) handing off from the install script. The
 script (`setup-mac.sh` or `setup-windows.ps1`) just finished Phase 1 — it
 installed Claude Code, the Elnora CLI, Node.js, Git, Python, VS Code, GitHub
 CLI, and Obsidian. Your job (Phase 2) is to verify what's installed, collect
-the user's Elnora API key, run a smoke test, and hand them a working
-environment.
+the user's Elnora API key, **authenticate the GitHub CLI and create their
+private GitHub repo**, run a smoke test, and hand them a working
+environment. GitHub setup is mandatory — every user finishes Phase 2 with
+a private GitHub repo containing the starter kit.
 
 Be transparent: announce each step before you run it, show the output, and
 explain what you found. The user is likely a lab scientist who has never
@@ -46,22 +48,34 @@ mode, follow these adjustments:
     write directly with a single `Bash` call to
     `python3 -c "open('.claude/knowledge-base.local.md','w').write('''<contents>''')"`
     (or PowerShell `Set-Content` on Windows) and move on.
+- **Step 6 (GitHub bootstrap):** in headless mode, do step 6a (verify `gh`
+  is installed) and step 6c.1+6c.2 (init + commit) only. **Skip 6b (auth),
+  6c.3+6c.4+6c.5 (repo create / push / fetch verify), and 6d.** The
+  handoff-e2e workflow has no GitHub credentials, no browser, and no
+  user; the local-state assertions in the checklist below are sufficient.
 - **Step 9 (Sample protocol):** skip — there is no user to wow.
 - **Before printing `HANDOFF_COMPLETE`, verify ALL of these are true.** If
   any item is missing, finish it before declaring complete:
   1. `elnora auth status` reports `authenticated: true` (the API key is
      persisted to `~/.elnora/profiles.toml`, so future shells stay
      authed).
-  2. `.git/` exists; `git remote -v` shows `elnora-upstream`.
-  3. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
+  2. `.git/` exists and `git log --oneline | wc -l` is `>= 1` (the initial
+     commit landed locally).
+  3. **Interactive mode:** `git remote -v` shows exactly one remote,
+     `origin`, pointing at `https://github.com/<gh-username>/<repo>.git`;
+     `git rev-parse HEAD` equals `git rev-parse origin/main`; and
+     `gh repo view --json visibility --jq .visibility` returns `"PRIVATE"`.
+     **Headless mode:** `git remote -v` is empty (no remotes) — GitHub
+     bootstrap was skipped on purpose.
+  4. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
-  4. `CLAUDE.md` no longer contains the `### First-run setup` heading or
+  5. `CLAUDE.md` no longer contains the `### First-run setup` heading or
      its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
-  5. `elnora whoami` and `elnora doctor` completed without
+  6. `elnora whoami` and `elnora doctor` completed without
      authentication errors.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
-  this until the five-item checklist above is satisfied.
+  this until the six-item checklist above is satisfied.
 
 ---
 
@@ -147,35 +161,176 @@ fresh key. If it errors with a network message, see `RECOVERY.md` →
 > Note: it's `elnora whoami` (top-level), NOT `elnora auth whoami`.
 > The `auth` subcommand only has `login | status | logout | profiles | validate`.
 
-### 6. Make this a git repo (seed-repo step)
+### 6. GitHub bootstrap — give the user a real first repo
 
-The kit reaches the user's machine as files extracted from a tarball — there
-is no `.git/` directory by default (the bootstrap can't `git clone` because
-git isn't always installed yet at that point). Initialize a fresh repo here
-and wire in our upstream so the user can `git fetch elnora-upstream` for
-future updates, while `origin` stays free for their own remote.
+This is **not optional**. By the end of step 6 the user has a private
+GitHub repo on their account containing the starter kit's contents, with
+local `main` pushed and matching `origin/main`. Verify every substep before
+moving on. If a check fails, fix it and re-verify — do NOT carry forward a
+half-finished setup.
 
-If `.git/` already exists (rare — the user manually `git clone`'d the kit
-instead of using the one-liner), just rename the existing origin instead.
+The `.github/` and `tests/` directories were already stripped by the
+installer, so the very first commit is clean — only the user-facing surface
+goes to GitHub.
+
+#### 6a. Pre-flight: confirm `gh` is installed
 
 ```
-if [ -d .git ]; then
-    git remote rename origin elnora-upstream
-else
-    git init -q
-    git symbolic-ref HEAD refs/heads/main
-    git remote add elnora-upstream https://github.com/Elnora-AI/elnora-starter-kit.git
-fi
-git remote -v   # should show "elnora-upstream" (fetch + push), no "origin"
+gh --version
 ```
 
-Tell the user: "This is now your own git repo. Our upstream is preserved as
-`elnora-upstream` so you can `git fetch elnora-upstream` for future updates.
-`origin` is free for you to point at your own GitHub repo whenever you create
-one."
+Expected: a version string, exit 0. **Verification gate**: exit code is 0.
 
-Optionally offer: "Want me to create a private GitHub repo for this and push
-it? Run `gh repo create <name> --private --source=. --push`."
+If `gh` is missing (mid-install crash, PATH issue), install it now:
+
+- macOS: `brew install gh` (Homebrew is already present from Phase 1).
+- Windows: `winget install --id GitHub.cli`.
+
+Re-run `gh --version`. Do not continue until the gate passes.
+
+#### 6b. Authenticate `gh`
+
+```
+gh auth status
+```
+
+If it says "Logged in to github.com as <user>" with `git_protocol: https`,
+proceed to 6c.
+
+If it says "not logged in" (or the protocol is wrong), tell the user in
+plain language:
+
+> "Before I can put your code on GitHub I need you to log in. Open a new
+> Terminal tab (Cmd+T on macOS, Ctrl+Shift+T on Windows), paste the command
+> below, and follow the prompts — it'll show you a one-time code, then open
+> a browser. Paste the code into the browser, click Authorize, and come
+> back here when it says you're logged in."
+
+```
+gh auth login --hostname github.com --git-protocol https --web
+```
+
+Walk them through the prompts they'll see (GitHub.com → HTTPS → Login with
+a web browser → copy code → paste in browser → Authorize). Wait for the
+user to confirm "done."
+
+**Verification gate** — run ALL of these and proceed only if every one
+passes:
+
+- `gh auth status` exits 0 and contains "Logged in to github.com".
+- `gh api user --jq .login` returns a non-empty username. Capture this as
+  `<gh-username>` for 6c.
+- `gh auth status` mentions "Git operations" or `git_protocol: https` —
+  i.e. git is wired through gh's credential helper, not stale ssh.
+
+If any gate fails: tell the user what went wrong, ask them to re-run
+`gh auth login`, re-verify. Do not proceed with broken auth.
+
+#### 6c. Initialize, commit, create the GitHub repo, and push
+
+1. Initialize the local repo on `main`:
+
+   ```
+   git init -q
+   git symbolic-ref HEAD refs/heads/main
+   ```
+
+   **Gate**: `.git/` exists; `git symbolic-ref HEAD` returns
+   `refs/heads/main`.
+
+2. Stage and commit everything:
+
+   ```
+   git add .
+   git commit -q -m "Initial commit"
+   ```
+
+   **Gate**: `git log --oneline | wc -l` returns `1`; `git status
+   --porcelain` is empty.
+
+3. Suggest a repo name. Default = `<gh-username>-agents` (e.g.
+   `carmen-agents`, `alex-agents`) — generic, personal, communicates "this
+   is your agent workspace." Tell the user:
+
+   > "What do you want to name your repo on GitHub? I suggest
+   > **`<gh-username>-agents`** — generic, yours, easy to remember. If
+   > you'd like something else, tell me. It will be **private** either
+   > way."
+
+   Accept any non-empty input matching `[A-Za-z0-9._-]+`. **Do not ask
+   about visibility.** Always private. If the user requests public,
+   explain: "Let's keep this one private — it can hold credentials, vault
+   paths, and personal notes safely. If you want a public repo later for
+   sharing a sample protocol, create a separate one for that."
+
+4. Create the GitHub repo and push in one shot:
+
+   ```
+   gh repo create <chosen-name> --private --source=. --push
+   ```
+
+   This creates the repo, wires it as `origin`, and pushes `main` —
+   atomically.
+
+   **Gate** — run ALL of these:
+   - `gh repo create` exit code is 0.
+   - `git remote -v` shows `origin` pointing at
+     `https://github.com/<gh-username>/<chosen-name>.git` for both fetch
+     and push.
+   - `git remote -v` shows NO `elnora-upstream` (sanity check).
+   - `gh repo view <chosen-name> --json visibility --jq .visibility`
+     returns `"PRIVATE"`.
+
+   **If `gh repo create` fails with "name already exists on this account":**
+   surface the error verbatim, suggest alternatives
+   (`<gh-username>-agents-2`, `<gh-username>-elnora`, `<gh-username>-lab`),
+   ask the user to pick or invent one, retry from this substep. Do NOT
+   pre-emptively delete or rename anything on GitHub.
+
+5. Confirm the push landed on the default branch (the "merged" check):
+
+   ```
+   git fetch origin
+   ```
+
+   **Gate**: `git rev-parse HEAD` equals `git rev-parse origin/main`. If
+   not equal: run `git push -u origin main` explicitly, re-fetch, re-check.
+   If it still doesn't match, see `RECOVERY.md` → "GitHub repo creation
+   fails".
+
+#### 6d. Show the user what they just got
+
+```
+gh repo view <chosen-name>
+```
+
+(Without `--web` so the output prints to the terminal — you need to see and
+report it.)
+
+Tell the user:
+
+- "Your repo is live at `https://github.com/<gh-username>/<chosen-name>`."
+- "It's private — only you can see it."
+- "Everything we set up is in there: `CLAUDE.md`, the install scripts, the
+  `.claude/` folder, docs, MCP config, templates. Internal CI and test
+  scripts were stripped during install — your repo only has what *you*
+  need."
+- "From now on, when you `git commit` and `git push`, your work goes to
+  that URL. It's your repo to manage from here."
+
+Offer to open it in the browser:
+
+```
+gh repo view <chosen-name> --web
+```
+
+**Final verification gate before marking step 6 complete**:
+
+- `git log --oneline | wc -l` >= 1.
+- `git remote -v` shows exactly one remote (`origin`), no others.
+- `git rev-parse HEAD` == `git rev-parse origin/main`.
+- `gh repo view <chosen-name> --json visibility,owner --jq '.visibility + " " + .owner.login'`
+  returns `PRIVATE <gh-username>`.
 
 ### 7. Smoke test — confirm Elnora API is reachable
 
@@ -217,12 +372,14 @@ tools), show the output, and explain what they're looking at.
 Tell the user:
 
 - ✅ Setup complete.
-- The repo lives at `<repo-path>`.
+- The local repo lives at `<repo-path>`.
+- Their private GitHub repo is at
+  `https://github.com/<gh-username>/<chosen-name>` (`origin`).
 - Their Elnora API key is saved to `~/.elnora/profiles.toml` (mode 600,
   outside the repo, never committed). Every new terminal stays authed.
 - The Elnora CLI works globally — `elnora --help` from any terminal.
-- This is now their own repo (`origin` is free; `elnora-upstream` points at
-  ours for future updates).
+- This is now their repo to manage from here. Commit, push, branch, rename
+  it — whatever they want.
 - Next: try asking Claude to do something — generate another protocol, write
   notes, plan an experiment.
 

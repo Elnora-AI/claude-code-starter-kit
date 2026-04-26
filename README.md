@@ -56,8 +56,10 @@ the kit means trusting `raw.githubusercontent.com/Elnora-AI/elnora-starter-kit`,
    login.
 3. **Phase 2 — agent handoff (~3–5 min).** Claude follows
    [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md): verifies installed
-   versions, prompts for the Elnora API key, runs a smoke test, and
-   optionally configures an Obsidian knowledge base.
+   versions, prompts for the Elnora API key, **authenticates the GitHub
+   CLI, creates your private GitHub repo, and pushes the starter kit to
+   it**, runs a smoke test, and optionally configures an Obsidian
+   knowledge base.
 4. **Verification.** Claude generates a sample protocol to confirm the
    end-to-end setup.
 
@@ -75,9 +77,9 @@ Each component plays a distinct role in the workflow:
 - **Python 3 and Node.js** — runtimes for the supporting tooling. Most
   Claude Code plugins and MCP servers ship as Node packages; several
   utility scripts run on Python. Both are required for the kit to function.
-- **Git and GitHub CLI** — version control and GitHub integration. Used to
-  clone the kit, track changes to your protocols and notes, and optionally
-  publish your repository.
+- **Git and GitHub CLI** — version control and GitHub integration. Phase 2
+  uses these to create your private GitHub repo, push the starter kit to
+  it, and track every change you make from there on.
 - **VS Code** — editor for reviewing and editing the files Claude
   produces, alongside the terminal session.
 - **Obsidian** — knowledge-base viewer. Renders the markdown files in your
@@ -103,28 +105,26 @@ elnora-starter-kit/
 ├── .claude/
 │   ├── settings.json                      # Plugins, permissions, env defaults
 │   └── knowledge-base.local.md.template   # Per-user knowledge-base config
-├── docs/
-│   └── getting-started.md                 # Manual setup fallback
-└── .github/
-    ├── dependabot.yml                     # Weekly dependency updates
-    └── workflows/codeql.yml               # Weekly CodeQL scans
+└── docs/
+    └── getting-started.md                 # Daily-workflow guide + manual fallback
 ```
 
 ## Post-install
 
-The install script removes the original upstream remote and preserves it as
-`elnora-upstream`. The cloned directory is now an independent repository.
-Verify with `git remote -v`. To pull future updates from the starter kit:
+When Phase 2 finishes you have a **private** GitHub repo on your account
+containing the starter kit's user-facing contents. Internal CI/test
+scaffolding is stripped during install — your repo holds only what you
+need: `CLAUDE.md`, `.claude/`, `docs/`, install scripts, MCP config,
+templates.
 
-```bash
-git fetch elnora-upstream
-```
+The repo's `origin` remote points at your GitHub account. Verify with
+`git remote -v`. From here on it's **your** repo: commit, push, branch,
+and rename it however you like.
 
-To publish your repo to GitHub:
-
-```bash
-gh repo create my-lab-repo --private --source=. --push
-```
+If you'd like a separate public version later (e.g. to share a sample
+protocol), create a fresh repo for that — don't flip this one. This one
+can hold credentials, vault paths, and personal notes safely because it
+stays private.
 
 ## Knowledge base (optional)
 
