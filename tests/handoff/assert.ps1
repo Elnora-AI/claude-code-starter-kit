@@ -60,11 +60,24 @@ if (Test-Path $profilesPath) {
 } else {
     Assert-Fail "$profilesPath was not created (Claude did not run 'elnora auth login --api-key …')"
 }
-elnora auth status > $null 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Assert-Ok "elnora auth status returns success"
+# Resolve the CLI binary explicitly. The Phase 1 install adds it to PATH for
+# subsequent shells via setx, but a fresh pwsh step in CI doesn't always
+# inherit that — Get-Command can come up empty even though the binary is on
+# disk. Fall back to the known install location before declaring auth dead.
+$elnoraExe = (Get-Command elnora -ErrorAction SilentlyContinue).Source
+if (-not $elnoraExe) {
+    $candidate = Join-Path $env:USERPROFILE ".elnora\bin\elnora.exe"
+    if (Test-Path $candidate) { $elnoraExe = $candidate }
+}
+if ($elnoraExe) {
+    & $elnoraExe auth status > $null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Assert-Ok "elnora auth status returns success"
+    } else {
+        Assert-Fail "elnora auth status failed (CLI is not authenticated)"
+    }
 } else {
-    Assert-Fail "elnora auth status failed (CLI is not authenticated)"
+    Assert-Fail "elnora binary not found on PATH or at $env:USERPROFILE\.elnora\bin\elnora.exe"
 }
 $global:LASTEXITCODE = 0
 
