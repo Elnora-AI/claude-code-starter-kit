@@ -367,7 +367,7 @@ persist_brew_path() {
             echo "# Added by Elnora Starter Kit setup-mac.sh"
             echo "$brew_eval"
         } >> "$shell_profile"
-        echo "  Added Homebrew PATH to $shell_profile (takes effect in new terminals)."
+        echo "  Ensuring shell profile loads Homebrew (idempotent) -> $shell_profile."
     fi
 }
 
@@ -629,14 +629,30 @@ else
 fi
 CHECK="+"
 CROSS="X"
+DASH="-"
+if [ -t 1 ]; then
+    GRAY=$'\033[1;30m'
+else
+    GRAY=""
+fi
+
+# Sentinel for "this optional component was deliberately skipped via
+# ELNORA_SKIP_OPTIONAL_INSTALLS=1 and isn't already on disk." Mirrors the
+# __SKIPPED_OPTIONAL constant in setup-windows.ps1 so the install summary
+# can render a neutral "skipped (optional, env flag)" row instead of a
+# red NOT INSTALLED row that looks like a real failure to the user.
+SKIPPED_OPTIONAL="__SKIPPED_OPTIONAL"
 
 # print_status "<label>" "<version-or-empty>"
-# Empty / "not found" version => red X NOT INSTALLED
-# Anything else                => green + <version>
+# Empty / "not found" version    => red X NOT INSTALLED
+# Sentinel __SKIPPED_OPTIONAL    => gray - skipped (optional, env flag)
+# Anything else                  => green + <version>
 print_status() {
     local label="$1"
     local version="$2"
-    if [ -z "$version" ] || [ "$version" = "not found" ]; then
+    if [ "$version" = "$SKIPPED_OPTIONAL" ]; then
+        printf "  %s%s%s %-12s %sskipped (optional, env flag)%s\n" "$GRAY" "$DASH" "$NC" "$label:" "$GRAY" "$NC"
+    elif [ -z "$version" ] || [ "$version" = "not found" ]; then
         printf "  %s%s%s %-12s %sNOT INSTALLED%s\n" "$RED" "$CROSS" "$NC" "$label:" "$RED" "$NC"
     else
         printf "  %s%s%s %-12s %s%s%s\n" "$GREEN" "$CHECK" "$NC" "$label:" "$GREEN" "$version" "$NC"
@@ -646,6 +662,10 @@ print_status() {
 # VS Code: `code` may not be on PATH until the user runs
 # "Shell Command: Install 'code' command in PATH" from VS Code's palette.
 # Check for the .app bundle as a fallback so the summary isn't misleading.
+# When ELNORA_SKIP_OPTIONAL_INSTALLS=1 (CI smoke test) caused us to skip the
+# install AND the editor isn't already on disk, return the sentinel so the
+# summary renders a neutral "skipped (optional, env flag)" row instead of a
+# red NOT INSTALLED row.
 vscode_version() {
     if command -v code &> /dev/null; then
         code --version 2>/dev/null | head -1
@@ -657,6 +677,8 @@ vscode_version() {
         else
             echo "installed - run \"Shell Command: Install code command in PATH\" from VS Code"
         fi
+    elif [ "${ELNORA_SKIP_OPTIONAL_INSTALLS:-}" = "1" ]; then
+        echo "$SKIPPED_OPTIONAL"
     else
         echo ""
     fi
@@ -671,37 +693,54 @@ obsidian_version() {
         else
             echo "installed"
         fi
+    elif [ "${ELNORA_SKIP_OPTIONAL_INSTALLS:-}" = "1" ]; then
+        echo "$SKIPPED_OPTIONAL"
     else
         echo ""
     fi
 }
 
-print_status "Node.js"     "$(node --version 2>/dev/null || true)"
-print_status "Git"         "$(git --version 2>/dev/null || true)"
-print_status "Python"      "$(python3 --version 2>/dev/null || true)"
-print_status "VS Code"     "$(vscode_version)"
-print_status "Claude Code" "$(claude --version 2>/dev/null || true)"
-print_status "Elnora CLI"  "$(elnora --version 2>/dev/null || true)"
-print_status "GitHub CLI"  "$(gh --version 2>/dev/null | head -1 || true)"
-print_status "Obsidian"    "$(obsidian_version)"
+# Compute every tool's version up-front so the summary table AND the headline
+# count use the same data. Storing in parallel arrays preserves output order
+# and avoids re-running each version probe twice (once for the row, once for
+# the counter).
+SUMMARY_LABELS=("Node.js" "Git" "Python" "VS Code" "Claude Code" "Elnora CLI" "GitHub CLI" "Obsidian")
+SUMMARY_VALUES=(
+    "$(node --version 2>/dev/null || true)"
+    "$(git --version 2>/dev/null || true)"
+    "$(python3 --version 2>/dev/null || true)"
+    "$(vscode_version)"
+    "$(claude --version 2>/dev/null || true)"
+    "$(elnora --version 2>/dev/null || true)"
+    "$(gh --version 2>/dev/null | head -1 || true)"
+    "$(obsidian_version)"
+)
+
+for i in "${!SUMMARY_LABELS[@]}"; do
+    print_status "${SUMMARY_LABELS[$i]}" "${SUMMARY_VALUES[$i]}"
+done
 echo ""
 
-# Quick scan: count anything still missing so the user sees a clear pass/fail
-# headline regardless of whether they read every row.
+# A "skipped optional" entry is neither installed nor missing - it's a
+# deliberate non-event in CI. Exclude it from both counters so the headline
+# tells the truth ("All N installed" remains accurate when CI skipped the
+# optional editor / vault).
 MISSING_COUNT=0
-for v in \
-    "$(node --version 2>/dev/null || true)" \
-    "$(git --version 2>/dev/null || true)" \
-    "$(python3 --version 2>/dev/null || true)" \
-    "$(vscode_version)" \
-    "$(claude --version 2>/dev/null || true)" \
-    "$(elnora --version 2>/dev/null || true)" \
-    "$(gh --version 2>/dev/null | head -1 || true)" \
-    "$(obsidian_version)"; do
-    [ -z "$v" ] && MISSING_COUNT=$((MISSING_COUNT + 1))
+SKIPPED_OPTIONAL_COUNT=0
+for v in "${SUMMARY_VALUES[@]}"; do
+    if [ "$v" = "$SKIPPED_OPTIONAL" ]; then
+        SKIPPED_OPTIONAL_COUNT=$((SKIPPED_OPTIONAL_COUNT + 1))
+    elif [ -z "$v" ]; then
+        MISSING_COUNT=$((MISSING_COUNT + 1))
+    fi
 done
+REQUIRED_TOTAL=$(( ${#SUMMARY_VALUES[@]} - SKIPPED_OPTIONAL_COUNT ))
 if [ "$MISSING_COUNT" -eq 0 ]; then
-    printf "  %sAll 8 components installed.%s\n" "$GREEN" "$NC"
+    if [ "$SKIPPED_OPTIONAL_COUNT" -gt 0 ]; then
+        printf "  %sAll %d required components installed (%d optional skipped).%s\n" "$GREEN" "$REQUIRED_TOTAL" "$SKIPPED_OPTIONAL_COUNT" "$NC"
+    else
+        printf "  %sAll %d components installed.%s\n" "$GREEN" "$REQUIRED_TOTAL" "$NC"
+    fi
 else
     printf "  %s%d component(s) NOT installed - see red X rows above and remediation below.%s\n" "$RED" "$MISSING_COUNT" "$NC"
 fi
