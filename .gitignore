@@ -51,6 +51,8 @@ azure-*.json
 # ============================================================
 .claude/settings.local.json
 .claude/knowledge-base.local.md
+# Ephemeral lock files written by the harness (e.g. scheduled_tasks.lock)
+.claude/*.lock
 
 # Runtime scratch folder — regenerable state, logs, downloaded artifacts
 # Keep the folder (README + .gitkeep) but ignore everything else inside

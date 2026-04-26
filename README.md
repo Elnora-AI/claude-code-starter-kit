@@ -25,7 +25,8 @@ curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/i
 irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
 ```
 
-Total runtime: 10–15 minutes on a fresh machine.
+Total runtime: 15–25 minutes on a fresh machine (Xcode CLT can take 5–10
+minutes on its own, plus first-run Homebrew/Node/etc.).
 
 These bootstrap commands and the setup scripts they invoke download installers
 over HTTPS and execute them without separate checksum verification. Running

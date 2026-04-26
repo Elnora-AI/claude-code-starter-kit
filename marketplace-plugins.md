@@ -45,7 +45,7 @@ The rest are available in this marketplace — install via `/plugins`.
 
 | Plugin | What it gives you | Best for |
 |--------|-------------------|----------|
-| **document-skills** | Read/create PDFs, Word docs, Excel, PowerPoint, and more | **Everyone — install this first** |
+| **document-skills** | Read/create PDFs, Word docs, Excel, PowerPoint, and more | Recommended first install — not enabled by default, install via `/plugins` |
 
 What `document-skills` adds:
 - `/pdf` — Extract text from PDFs, create new PDFs, merge/split documents
