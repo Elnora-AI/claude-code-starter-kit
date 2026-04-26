@@ -712,6 +712,11 @@ echo "  Phase 1 complete — handing off to Claude"
 echo "==========================================="
 echo ""
 
+# The exact prompt handed to Claude. Defined once so the headless test mode
+# below uses byte-for-byte the same string as the production handoff —
+# divergence here is the bug headless mode is supposed to catch.
+HANDOFF_PROMPT="Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at ~/claude-starter-install.log."
+
 if command -v claude >/dev/null 2>&1; then
     if [ "${ELNORA_SKIP_HANDOFF:-}" = "1" ]; then
         # CI/test escape hatch: print what would happen and exit cleanly. Used
@@ -720,12 +725,41 @@ if command -v claude >/dev/null 2>&1; then
         echo "ELNORA_SKIP_HANDOFF=1 set — would exec claude with the Phase 2 prompt. Skipping for non-interactive run."
         exit 0
     fi
+
+    if [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
+        # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
+        # we can verify what Claude actually does after the handoff, not just
+        # that the handoff fired. Same prompt, same cwd as production — only
+        # the I/O wrapper changes (one-shot print mode + bypassPermissions
+        # because nobody's there to approve tool calls).
+        #
+        # Requires ANTHROPIC_API_KEY in env so claude skips browser OAuth.
+        # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
+        # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
+        # that branch explicitly).
+        TRANSCRIPT="${ELNORA_HANDOFF_TRANSCRIPT:-$HOME/handoff-transcript.jsonl}"
+        echo "ELNORA_HANDOFF_MODE=headless — running claude -p (transcript: $TRANSCRIPT)"
+        # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
+        # rejects the combo otherwise). --max-turns 50 caps a runaway loop;
+        # Phase 2 should fit comfortably under 30 turns.
+        claude -p "$HANDOFF_PROMPT" \
+            --permission-mode bypassPermissions \
+            --output-format stream-json \
+            --verbose \
+            --max-turns 50 \
+          | tee "$TRANSCRIPT"
+        rc=${PIPESTATUS[0]}
+        echo ""
+        echo "claude -p exited with code $rc (transcript saved to $TRANSCRIPT)"
+        exit "$rc"
+    fi
+
     echo "Starting Claude — it will read INSTALL_FOR_AGENTS.md and finish setup."
     echo "On first run, your browser will open to log into your Claude Pro/Max account."
     echo ""
     # exec replaces this shell — Claude takes over with the initial prompt loaded.
     # If exec fails (no TTY, broken install), the lines below print as a fallback.
-    exec claude "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at ~/claude-starter-install.log."
+    exec claude "$HANDOFF_PROMPT"
 fi
 
 # Fallback: claude not on PATH (install of Claude Code itself failed) — show

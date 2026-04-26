@@ -1,0 +1,253 @@
+name: handoff-e2e
+
+# End-to-end test of the Phase 1 → Phase 2 handoff. Runs the real setup
+# script, lets it `claude -p` into INSTALL_FOR_AGENTS.md (headless mode),
+# and asserts on disk that Claude actually completed Phase 2.
+#
+# Manual-only (workflow_dispatch). Uses real ANTHROPIC_API_KEY and a real
+# ELNORA_API_KEY against the live Elnora API — costs LLM tokens per run.
+#
+# Required GitHub repository secrets:
+#   ANTHROPIC_API_KEY   - sk-ant-* key. Set a low monthly budget cap on it
+#                         in the Anthropic console so a runaway test can't
+#                         spike the bill.
+#   ELNORA_API_KEY_TEST - elnora_live_* key. Recommend a dedicated test
+#                         account, not your personal one — every run will
+#                         hit `elnora auth whoami` and `elnora protocol list`.
+#
+# Set both at:
+#   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+#
+# Security note on the workflow_dispatch `os` input below: it's a `choice`
+# type restricted to {both, macos, windows} and only used in `if:`
+# expressions (not shell-interpolated), so no injection surface.
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "Which OS to run on"
+        type: choice
+        default: "both"
+        options:
+          - both
+          - macos
+          - windows
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS handoff E2E
+    if: github.event.inputs.os == 'both' || github.event.inputs.os == 'macos'
+    runs-on: macos-14
+    timeout-minutes: 25
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
+      ELNORA_HANDOFF_MODE: headless
+      ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}/handoff-transcript.jsonl
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets are present
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set"
+            exit 1
+          fi
+          if [ -z "$ELNORA_API_KEY" ]; then
+            echo "::error::ELNORA_API_KEY_TEST secret is not set"
+            exit 1
+          fi
+          # Quick sanity check on the secret shapes — catches a swapped paste.
+          case "$ANTHROPIC_API_KEY" in
+            sk-ant-*) echo "ANTHROPIC_API_KEY shape OK" ;;
+            *) echo "::error::ANTHROPIC_API_KEY does not start with sk-ant-"; exit 1 ;;
+          esac
+          case "$ELNORA_API_KEY" in
+            elnora_live_*) echo "ELNORA_API_KEY shape OK" ;;
+            *) echo "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"; exit 1 ;;
+          esac
+
+      - name: Pre-set git config (skip Read prompt)
+        run: |
+          git config --global user.name "Handoff E2E"
+          git config --global user.email "handoff-e2e@elnora-starter-kit.test"
+
+      - name: Stage fake Obsidian vault for KB auto-detect
+        run: |
+          mkdir -p "$HOME/Documents/test-vault/.obsidian"
+          echo "# Test vault" > "$HOME/Documents/test-vault/README.md"
+
+      - name: Run setup-mac.sh in headless handoff mode
+        run: |
+          chmod +x setup-mac.sh
+          # The script will: install all tools, then enter headless handoff
+          # mode (because ELNORA_HANDOFF_MODE=headless is in env), invoke
+          # `claude -p` with the production prompt, capture the transcript,
+          # and exit with claude's exit code.
+          bash setup-mac.sh
+
+      - name: Scrub secrets from transcript (PUBLIC REPO defense)
+        # Run BEFORE any step that reads the transcript or uploads it. GitHub
+        # auto-redacts registered secrets in workflow STEP LOGS but NOT in
+        # uploaded ARTIFACT files — and this is a public repo, so artifacts
+        # are publicly downloadable. We rewrite the file in place, replacing
+        # any key-shaped string with ***REDACTED***. Defense in depth on top
+        # of GitHub's own redaction.
+        if: always()
+        run: |
+          if [ ! -f "$ELNORA_HANDOFF_TRANSCRIPT" ]; then
+            echo "(no transcript to scrub)"
+            exit 0
+          fi
+          python3 - "$ELNORA_HANDOFF_TRANSCRIPT" <<'PY'
+          import re, sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          s = p.read_text()
+          before = len(s)
+          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***',     s)
+          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***', s)
+          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***',         s)
+          p.write_text(s)
+          print(f"Scrubbed transcript: {before} -> {len(s)} bytes")
+          PY
+
+      - name: Show install log (for debugging)
+        if: always()
+        run: |
+          echo "=== ~/claude-starter-install.log (tail) ==="
+          tail -200 "$HOME/claude-starter-install.log" 2>/dev/null || echo "(log not produced)"
+
+      - name: Show handoff transcript (tail, scrubbed)
+        if: always()
+        run: |
+          echo "=== handoff-transcript.jsonl (last 50 lines, post-scrub) ==="
+          tail -50 "$ELNORA_HANDOFF_TRANSCRIPT" 2>/dev/null || echo "(transcript not produced)"
+
+      - name: Run post-state assertions
+        if: always()
+        run: |
+          chmod +x tests/handoff/assert.sh
+          tests/handoff/assert.sh "$PWD" "$ELNORA_HANDOFF_TRANSCRIPT"
+
+      - name: Upload transcript as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: handoff-transcript-macos
+          path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows:
+    name: Windows handoff E2E
+    if: github.event.inputs.os == 'both' || github.event.inputs.os == 'windows'
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELNORA_API_KEY: ${{ secrets.ELNORA_API_KEY_TEST }}
+      ELNORA_HANDOFF_MODE: headless
+      ELNORA_HANDOFF_TRANSCRIPT: ${{ github.workspace }}\handoff-transcript.jsonl
+      # Same rationale as install-smoke-test.yml — windows-2022 has no winget.
+      ELNORA_SKIP_OPTIONAL_INSTALLS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required secrets are present
+        shell: pwsh
+        run: |
+          if (-not $env:ANTHROPIC_API_KEY) {
+            Write-Host "::error::ANTHROPIC_API_KEY secret is not set"
+            exit 1
+          }
+          if (-not $env:ELNORA_API_KEY) {
+            Write-Host "::error::ELNORA_API_KEY_TEST secret is not set"
+            exit 1
+          }
+          if ($env:ANTHROPIC_API_KEY -notlike "sk-ant-*") {
+            Write-Host "::error::ANTHROPIC_API_KEY does not start with sk-ant-"
+            exit 1
+          }
+          if ($env:ELNORA_API_KEY -notlike "elnora_live_*") {
+            Write-Host "::error::ELNORA_API_KEY_TEST does not start with elnora_live_"
+            exit 1
+          }
+          Write-Host "Secret shapes OK"
+
+      - name: Pre-set git config (skip Read prompt)
+        shell: pwsh
+        run: |
+          git config --global user.name "Handoff E2E"
+          git config --global user.email "handoff-e2e@elnora-starter-kit.test"
+
+      - name: Stage fake Obsidian vault for KB auto-detect
+        shell: pwsh
+        run: |
+          $vault = Join-Path $env:USERPROFILE "Documents\test-vault\.obsidian"
+          New-Item -ItemType Directory -Force -Path $vault | Out-Null
+          Set-Content -Path (Join-Path $env:USERPROFILE "Documents\test-vault\README.md") -Value "# Test vault"
+
+      - name: Run setup-windows.ps1 in headless handoff mode
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          .\setup-windows.ps1
+
+      - name: Scrub secrets from transcript (PUBLIC REPO defense)
+        # See matching comment in the macOS job above.
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:ELNORA_HANDOFF_TRANSCRIPT)) {
+            Write-Host "(no transcript to scrub)"
+            exit 0
+          }
+          $s = Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Raw
+          $before = $s.Length
+          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***')
+          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***')
+          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***')
+          Set-Content -Path $env:ELNORA_HANDOFF_TRANSCRIPT -Value $s -NoNewline
+          Write-Host "Scrubbed transcript: $before -> $($s.Length) bytes"
+
+      - name: Show install log (for debugging)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== claude-starter-install.log (tail) ==="
+          $log = "$env:USERPROFILE\claude-starter-install.log"
+          if (Test-Path $log) {
+            Get-Content $log -Tail 200
+          } else {
+            Write-Host "(log not produced)"
+          }
+
+      - name: Show handoff transcript (tail, scrubbed)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== handoff-transcript.jsonl (last 50 lines, post-scrub) ==="
+          if (Test-Path $env:ELNORA_HANDOFF_TRANSCRIPT) {
+            Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Tail 50
+          } else {
+            Write-Host "(transcript not produced)"
+          }
+
+      - name: Run post-state assertions
+        if: always()
+        shell: pwsh
+        run: |
+          .\tests\handoff\assert.ps1 -RepoDir $PWD -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
+
+      - name: Upload transcript as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: handoff-transcript-windows
+          path: ${{ env.ELNORA_HANDOFF_TRANSCRIPT }}
+          if-no-files-found: warn
+          retention-days: 7
