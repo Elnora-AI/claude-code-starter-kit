@@ -86,16 +86,6 @@ mode, follow these adjustments:
     (must print `1`).
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
-  - **Do NOT strip `.github/` or `tests/` from the working tree.** The
-    customer-flow `install.sh` strips these before setup-mac.sh runs, but
-    in headless CI we run setup-mac.sh / setup-windows.ps1 directly and
-    the post-state assertion step depends on `tests/handoff/assert.sh`
-    (and `.github/` files) being present. If you see `.github/` and
-    `tests/` in the working tree, leave them alone — `git add . && git
-    commit` should include them in the initial commit. Do NOT run
-    `git rm -r .github/ tests/` or `git commit --amend` to strip them.
-    The doc text saying "already stripped by the installer" applies to
-    customer flow; ignore it here.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
     handoff-e2e workflow), do step 6 in full but with these adjustments:
     - **6b (auth):** instead of opening a browser, pipe the token into
@@ -108,11 +98,19 @@ mode, follow these adjustments:
 
       Then run the 6b verification gates as written. (`printf` avoids
       the trailing newline that `echo` adds, which `gh` rejects.)
+      After `gh auth setup-git`, git uses gh's credential helper for
+      pushes — do **not** embed the token in the remote URL
+      (`https://x-access-token:$TOKEN@github.com/...`) and do **not**
+      add `--no-thin` or other workaround flags to `git push`. If a
+      push fails, surface the actual error rather than papering over it.
     - **6c.3 (repo name):** do NOT prompt — use the value of
       `$ELNORA_HANDOFF_REPO_NAME` (CI sets this to
-      `elnora-handoff-ci-<github_run_id>`) as the chosen name. Validate
-      it matches `[A-Za-z0-9._-]+` like the doc says, but skip the user
-      conversation.
+      `elnora-handoff-ci-<github_run_id>-<attempt>-<os>`, collision-free
+      across reruns) as the chosen name. Validate it matches
+      `[A-Za-z0-9._-]+` like the doc says, but skip the user conversation.
+      The name is unique per run — do **not** pre-emptively
+      `gh repo delete` before creating; just run `gh repo create` and let
+      the create succeed on first try.
     - **6c.4 (create+push):** run `gh repo create "$ELNORA_HANDOFF_REPO_NAME"
       --private --source=. --push` and run all four gates as written
       (exit 0, origin URL, no `elnora-upstream`, visibility = `"PRIVATE"`).
@@ -125,7 +123,10 @@ mode, follow these adjustments:
     no PAT available), do step 6a (verify `gh` is installed) and
     step 6c.1+6c.2 (init + commit) only. Skip 6b, 6c.3+6c.4+6c.5, and
     6d.
-- **Step 9 (Sample protocol):** skip — there is no user to wow.
+- **Step 9 (Chrome DevTools MCP):** skip — there is no user, no
+  human-driven Chrome session to attach to, and the headless runner
+  doesn't have Chrome installed.
+- **Step 10 (Sample protocol):** skip — there is no user to wow.
 - **Before printing `HANDOFF_COMPLETE`, verify ALL of these are true.** If
   any item is missing, finish it before declaring complete:
   1. `elnora auth status` reports `authenticated: true` (the API key is
@@ -157,6 +158,12 @@ mode, follow these adjustments:
      log shows what wasn't green. Only auth-related failures (anything
      mentioning api key, token, 401/403, network, unreachable) block
      `HANDOFF_COMPLETE`.
+
+     **Capture `elnora doctor` output in full** — use the
+     `DOCTOR_OUT=$(elnora doctor 2>&1)` pattern from step 7. Do **not**
+     pipe through `tail -N` or `head -N`; the failing check name can
+     appear anywhere in the output, and truncation makes the triage
+     above unreliable.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
   this until the six-item checklist above is satisfied.
@@ -412,13 +419,9 @@ Offer to open it in the browser:
 gh repo view <chosen-name> --web
 ```
 
-**Final verification gate before marking step 6 complete**:
-
-- `git log --oneline | wc -l` >= 1.
-- `git remote -v` shows exactly one remote (`origin`), no others.
-- `git rev-parse HEAD` == `git rev-parse origin/main`.
-- `gh repo view <chosen-name> --json visibility,owner --jq '.visibility + " " + .owner.login'`
-  returns `PRIVATE <gh-username>`.
+The 6c.4 + 6c.5 gates already verified `origin`, visibility, and that
+`HEAD` matches `origin/main`. No need to re-run `git remote -v` here —
+the `gh repo view` call above is the only check left for step 6.
 
 ### 7. Smoke test — confirm Elnora API is reachable
 
@@ -491,7 +494,191 @@ now? It's the recommended way to keep notes that I can read."**
   later, just ask me 'help me set up my knowledge base' and I'll walk through
   it."
 
-### 9. Guided first task
+### 9. Chrome DevTools MCP — optional but ALWAYS ASK
+
+This step is **optional for the user but mandatory for you to ask.**
+Do not skip the question. Most users do not know this exists, and they
+cannot opt in if you never offer.
+
+There is nothing for you to install or configure on the agent side —
+the repo already ships everything pre-wired. Your only job is to
+(a) ask the user, (b) walk them through the Chrome side if they say
+yes, and (c) verify the connection works. Full agent-side reference:
+`docs/chrome-devtools-mcp-setup.md`. Do **not** paste internal config
+file paths or names into the chat — keep your spoken-to-the-user text
+in plain language.
+
+#### 9a. Ask the user — read this verbatim, do not paraphrase loosely
+
+> "There's one more optional thing I can set up. It connects me to
+> your real Chrome browser — the same Chrome you already use, with
+> all your logins, cookies, and tabs intact.
+>
+> Concretely, that means I can:
+> - See and switch between your open tabs.
+> - Open new pages, click buttons, fill forms, and upload files
+>   inside sessions you're already signed into (Linear, Gmail,
+>   GitHub, your lab's portal, etc.). No re-login needed.
+> - Read the page content, run JavaScript on a page, and inspect
+>   network requests and console logs — useful when you want me to
+>   debug a web app or grab data off a page you're looking at.
+> - Run Lighthouse / performance audits on any URL.
+>
+> A few things to know:
+> - It runs locally between this terminal and your Chrome. The
+>   underlying tool is maintained by Google and does send anonymous
+>   usage stats by default — we can turn that off if you'd like.
+> - Because I'd be acting through *your* logged-in browser, you should
+>   be the one to decide where I'm allowed to drive. Tell me which
+>   sites or actions you want me to confirm with you before clicking
+>   — payments, sending messages, anything irreversible — and I'll
+>   keep that in mind for this session.
+> - It's totally optional. Skipping it doesn't break anything — you
+>   can come back later and say 'set up the Chrome browser tools' any
+>   time.
+>
+> Want me to set it up now?"
+
+- **No / not now** → tell them: "No problem. Whenever you want this
+  later, just say 'set up the Chrome browser tools' and I'll walk you
+  through it." Skip to step 10.
+- **Yes** → continue to 9b.
+
+#### 9b. Pre-flight: confirm Chrome is installed and is version 144+
+
+`--autoConnect` requires Chrome 144 or newer. Check what they have:
+
+- **macOS:**
+
+  ```
+  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
+  ```
+
+- **Windows (PowerShell):**
+
+  ```
+  (Get-Item "C:\Program Files\Google\Chrome\Application\chrome.exe").VersionInfo.ProductVersion
+  ```
+
+  (Or the `(x86)` path if 32-bit.)
+
+Branch on the result:
+
+- **Chrome not installed.** Tell the user plainly: "I don't see
+  Chrome on your machine. Want me to install it?"
+  - macOS: `brew install --cask google-chrome`
+  - Windows: `winget install --id Google.Chrome` (or have them
+    download from `https://www.google.com/chrome/`)
+  - After install, re-run the version check.
+- **Chrome version < 144.** Tell the user: "Your Chrome is on
+  version `<X>`. I need 144 or newer for this to work. The fastest
+  way to update is: open Chrome → click the three-dot menu → Help →
+  About Google Chrome. Chrome will check for updates and apply them.
+  Let me know when it's done." Wait for confirmation, re-check version.
+- **Chrome version >= 144.** Proceed to 9c.
+
+#### 9c. Walk the user through the Chrome side
+
+Tell the user, in plain language and in this order:
+
+1. **"Open Chrome normally — just click the icon. Do NOT use any
+    special command-line flags, and do NOT launch it from the
+    terminal with `--remote-debugging-port` or anything like that.
+    A regular open is exactly what we need."**
+2. **"Sign into the sites you want me to be able to act on (Linear,
+    Gmail, GitHub, your lab portal, whatever). I'll use whatever
+    sessions are already there — I don't see your passwords, just
+    the cookies your browser already has."**
+3. **"Leave Chrome running. Don't quit it. Switch back to me here
+    when you're ready."**
+
+Wait for the user to confirm Chrome is open and they're signed into
+what they want.
+
+> Note: there is **no Chrome flag, extension, or `chrome://` setting**
+> to enable. Chrome 144+ exposes the local debugging endpoint to the
+> MCP automatically as long as it was launched normally. If you find
+> yourself instructing the user to flip a `chrome://` flag, stop —
+> that's the wrong path and usually means Chrome is on the wrong
+> version or was launched with a custom debugging port. See 9e.
+
+#### 9d. Verify the connection — three gates, all must pass
+
+Run these in order. After each, report the result to the user in one
+short sentence so they can see it working.
+
+1. **MCP server is registered.**
+
+   ```
+   claude mcp list | grep chrome-devtools
+   ```
+
+   **Gate**: a `chrome-devtools` line appears.
+
+2. **The MCP can see your real tabs.** Call
+   `mcp__chrome-devtools__list_pages`. (You may need to load the tool
+   first via `ToolSearch` with `select:mcp__chrome-devtools__list_pages`.)
+
+   **Gate**: the result lists at least one tab with the URL of
+   something the user actually has open. Read one of the URLs back to
+   them: "I can see you have `<url>` open — that's your real
+   Chrome." If the result is empty, jump to 9e.
+
+3. **A snapshot of the focused tab works.** Call
+   `mcp__chrome-devtools__take_snapshot`. Before doing this, glance
+   at the focused tab's URL from gate 2 — if it's a sensitive page
+   (banking, password manager, GitHub tokens / SSH keys, single-use
+   email links, etc.), call `mcp__chrome-devtools__select_page` to
+   switch to a non-sensitive tab first, or ask the user to point you
+   at the tab they want you to read. Snapshots dump the visible page
+   content into the transcript.
+
+   **Gate**: it returns an accessibility-tree snapshot (text content,
+   headings, buttons with `uid`s). If it errors or returns garbled
+   output, jump to 9e.
+
+If all three gates pass, tell the user: "Confirmed — I'm attached to
+your real Chrome. From now on, when you ask me to do something on the
+web, I can drive your browser instead of opening a separate one."
+
+#### 9e. Troubleshoot if a gate fails
+
+Match the symptom and act on it. Do **not** loop on the same fix more
+than twice — if it's still broken after two tries, tell the user
+"I'm hitting a snag connecting to Chrome — let's skip this for now,
+you can re-try later" and move on to step 10. Setup is optional; a
+stuck Chrome connection should not block the rest of the handoff.
+
+When you talk to the user, describe the problem in plain language —
+"Chrome doesn't seem to be running normally," not internal config
+file names. The internal-fix column below is for **you** to act on
+silently; do not paste it into chat.
+
+| Symptom (visible to you) | Likely cause | Internal fix you take |
+|--------------------------|--------------|------------------------|
+| `list_pages` returns empty | Chrome not running, or was launched with a custom remote-debugging port | Ask user to fully quit Chrome (Cmd+Q on macOS, close all windows on Windows) and reopen normally, then retry |
+| `list_pages` errors with "no browser" / can't find Chrome | Chrome version < 144 | Re-check version (9b); ask user to update via Chrome's About page |
+| `chrome-devtools` missing from `claude mcp list` | Stale Claude Code cache | Ask user to exit and restart Claude from the repo root |
+| Windows only: `npx` errors in MCP startup logs | Windows-specific shim was not applied | Re-run `setup-windows.ps1` to refresh the Windows MCP shim |
+| First call is slow | `npx` downloading the package on first run | Wait it out — one-time cost; subsequent calls reuse the local cache |
+
+#### 9f. Show the user what they just got
+
+Briefly, in the user's words, list two or three concrete things you
+can now do on their behalf. Tailor it to who they are — for a lab
+scientist that's usually:
+
+- "I can pull data off your lab's web portal without you copy-pasting it."
+- "I can fill out forms (vendor portals, ordering systems) for you to
+  review before submitting."
+- "If a web app is misbehaving, I can read the console errors and
+  network requests directly instead of asking you to paste them."
+
+Then hand control back: ask them which sites or kinds of actions
+they'd want you to pause and confirm on before clicking, and note
+their answer for the rest of the session.
+
+### 10. Guided first task
 
 Offer the user a wow moment: **"Want me to generate a sample protocol so you
 can see what Elnora does? Just tell me what you're trying to do — e.g.
@@ -500,7 +687,7 @@ can see what Elnora does? Just tell me what you're trying to do — e.g.
 If they say yes, run the appropriate `elnora` command (or use the elnora MCP
 tools), show the output, and explain what they're looking at.
 
-### 10. Done
+### 11. Done
 
 Tell the user:
 
