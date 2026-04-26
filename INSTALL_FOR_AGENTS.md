@@ -86,16 +86,6 @@ mode, follow these adjustments:
     (must print `1`).
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
-  - **Do NOT strip `.github/` or `tests/` from the working tree.** The
-    customer-flow `install.sh` strips these before setup-mac.sh runs, but
-    in headless CI we run setup-mac.sh / setup-windows.ps1 directly and
-    the post-state assertion step depends on `tests/handoff/assert.sh`
-    (and `.github/` files) being present. If you see `.github/` and
-    `tests/` in the working tree, leave them alone — `git add . && git
-    commit` should include them in the initial commit. Do NOT run
-    `git rm -r .github/ tests/` or `git commit --amend` to strip them.
-    The doc text saying "already stripped by the installer" applies to
-    customer flow; ignore it here.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
     handoff-e2e workflow), do step 6 in full but with these adjustments:
     - **6b (auth):** instead of opening a browser, pipe the token into
@@ -108,11 +98,19 @@ mode, follow these adjustments:
 
       Then run the 6b verification gates as written. (`printf` avoids
       the trailing newline that `echo` adds, which `gh` rejects.)
+      After `gh auth setup-git`, git uses gh's credential helper for
+      pushes — do **not** embed the token in the remote URL
+      (`https://x-access-token:$TOKEN@github.com/...`) and do **not**
+      add `--no-thin` or other workaround flags to `git push`. If a
+      push fails, surface the actual error rather than papering over it.
     - **6c.3 (repo name):** do NOT prompt — use the value of
       `$ELNORA_HANDOFF_REPO_NAME` (CI sets this to
-      `elnora-handoff-ci-<github_run_id>`) as the chosen name. Validate
-      it matches `[A-Za-z0-9._-]+` like the doc says, but skip the user
-      conversation.
+      `elnora-handoff-ci-<github_run_id>-<attempt>-<os>`, collision-free
+      across reruns) as the chosen name. Validate it matches
+      `[A-Za-z0-9._-]+` like the doc says, but skip the user conversation.
+      The name is unique per run — do **not** pre-emptively
+      `gh repo delete` before creating; just run `gh repo create` and let
+      the create succeed on first try.
     - **6c.4 (create+push):** run `gh repo create "$ELNORA_HANDOFF_REPO_NAME"
       --private --source=. --push` and run all four gates as written
       (exit 0, origin URL, no `elnora-upstream`, visibility = `"PRIVATE"`).
@@ -160,6 +158,12 @@ mode, follow these adjustments:
      log shows what wasn't green. Only auth-related failures (anything
      mentioning api key, token, 401/403, network, unreachable) block
      `HANDOFF_COMPLETE`.
+
+     **Capture `elnora doctor` output in full** — use the
+     `DOCTOR_OUT=$(elnora doctor 2>&1)` pattern from step 7. Do **not**
+     pipe through `tail -N` or `head -N`; the failing check name can
+     appear anywhere in the output, and truncation makes the triage
+     above unreliable.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
   this until the six-item checklist above is satisfied.
@@ -415,13 +419,9 @@ Offer to open it in the browser:
 gh repo view <chosen-name> --web
 ```
 
-**Final verification gate before marking step 6 complete**:
-
-- `git log --oneline | wc -l` >= 1.
-- `git remote -v` shows exactly one remote (`origin`), no others.
-- `git rev-parse HEAD` == `git rev-parse origin/main`.
-- `gh repo view <chosen-name> --json visibility,owner --jq '.visibility + " " + .owner.login'`
-  returns `PRIVATE <gh-username>`.
+The 6c.4 + 6c.5 gates already verified `origin`, visibility, and that
+`HEAD` matches `origin/main`. No need to re-run `git remote -v` here —
+the `gh repo view` call above is the only check left for step 6.
 
 ### 7. Smoke test — confirm Elnora API is reachable
 
