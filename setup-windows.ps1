@@ -891,6 +891,21 @@ Write-Host "  Phase 1 complete - handing off to Claude"
 Write-Host "==========================================="
 Write-Host ""
 
+# CI integration: propagate the script's accumulated PATH to $env:GITHUB_PATH
+# so subsequent workflow steps (handoff-e2e assertions, install-smoke-test
+# verifications, bootstrap-e2e checks) see every binary Phase 1 installed.
+# Without this, a fresh pwsh in the next step inherits the runner's job-
+# start PATH snapshot, which doesn't include %USERPROFILE%\.local\bin
+# (Claude), %USERPROFILE%\.elnora\bin, or anything winget added after job
+# start. Update-SessionPath fixed this for the current process; this fixes
+# it for downstream steps. No-op outside GH Actions (variable unset).
+if ($env:GITHUB_PATH) {
+    foreach ($dir in ($env:Path -split ';')) {
+        if ($dir) { Add-Content -Path $env:GITHUB_PATH -Value $dir }
+    }
+    Write-Host "  (CI: propagated PATH to `$GITHUB_PATH for downstream steps)"
+}
+
 # Close the transcript before handing off, so the log file is flushed and
 # Claude can read it as part of Phase 2.
 try { Stop-Transcript | Out-Null } catch { }
