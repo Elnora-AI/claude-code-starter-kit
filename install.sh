@@ -25,6 +25,8 @@ echo "  1. Download the starter kit to ~/Documents/elnora-starter-kit"
 echo "  2. Run setup-mac.sh (installs Claude Code + dev tools)"
 echo ""
 
+FRESH_EXTRACT=0
+
 if [ -d "$TARGET_DIR" ]; then
     echo "Starter kit already exists at $TARGET_DIR"
     echo "Re-running setup from existing copy. Remove the folder to re-download."
@@ -50,6 +52,7 @@ else
         fi
         mv "$EXTRACTED" "$TARGET_DIR"
         echo "Extracted to $TARGET_DIR"
+        FRESH_EXTRACT=1
     else
         echo "[!] Failed to download starter kit from $TARBALL_URL" >&2
         echo "    Check your internet connection and retry:" >&2
@@ -59,6 +62,28 @@ else
 fi
 
 cd "$TARGET_DIR"
+
+# On fresh extract, write a marker file recording the SHA256 of
+# INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-mac.sh
+# verifies this hash before handing off to claude with bypassPermissions —
+# if a third party tampers with the doc between extract and setup, the
+# verify step trips and the handoff aborts. This is the trust anchor for
+# the headless Phase 2 flow. PR2 (marker-based dir gate) extends the
+# schema; this PR introduces the file.
+#
+# We only write on FRESH extract. If we wrote on every run, a tampered
+# doc would just get re-blessed on the next install.sh invocation, which
+# defeats the point. setup-mac.sh handles the legacy "no marker" case
+# (existing users from before this PR) with a one-time auto-migrate.
+if [ "$FRESH_EXTRACT" = "1" ] && [ -f "$TARGET_DIR/INSTALL_FOR_AGENTS.md" ]; then
+    install_for_agents_sha=$(shasum -a 256 "$TARGET_DIR/INSTALL_FOR_AGENTS.md" | awk '{print $1}')
+    cat > "$TARGET_DIR/.elnora-starter-kit-marker" <<EOF
+version: 1
+created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+install_for_agents_sha256: $install_for_agents_sha
+EOF
+    echo "  Wrote integrity marker (.elnora-starter-kit-marker)."
+fi
 
 # Strip dev/CI scaffolding the customer can't use anyway. tests/handoff/ exists
 # for our CI assertions; .github/ holds workflows + dependabot config that only

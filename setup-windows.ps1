@@ -1366,6 +1366,47 @@ if ($claudeAvailable) {
         exit 0
     }
 
+    # Verify INSTALL_FOR_AGENTS.md hasn't been tampered with since
+    # install.ps1 extracted the zip. install.ps1 records the sha256 in
+    # .elnora-starter-kit-marker on fresh extract. If the file changed
+    # post-extract, abort - the agent shouldn't be handed off to a doc we
+    # didn't ship, especially when headless mode runs with bypassPermissions.
+    #
+    # Cases:
+    #   1. Marker + matching hash → proceed silently.
+    #   2. Marker + mismatched hash → exit 3, point user at the recovery.
+    #   3. No marker (pre-PR existing user) → warn once and proceed. PR2
+    #      tightens this with the H2 marker-on-existing-dir gate.
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $markerFile = Join-Path $scriptDir ".elnora-starter-kit-marker"
+    $docFile = Join-Path $scriptDir "INSTALL_FOR_AGENTS.md"
+    if (Test-Path -LiteralPath $docFile) {
+        if (Test-Path -LiteralPath $markerFile) {
+            $markerLines = Get-Content -LiteralPath $markerFile
+            $expectedSha = ""
+            foreach ($line in $markerLines) {
+                if ($line -match '^\s*install_for_agents_sha256:\s*([0-9a-fA-F]+)\s*$') {
+                    $expectedSha = $matches[1].ToLowerInvariant()
+                    break
+                }
+            }
+            $actualSha = (Get-FileHash -Path $docFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expectedSha -and ($expectedSha -ne $actualSha)) {
+                Write-Host "[!] INSTALL_FOR_AGENTS.md has been modified since this starter kit was installed." -ForegroundColor Red
+                Write-Host "    Expected sha256: $expectedSha" -ForegroundColor Red
+                Write-Host "    Actual sha256:   $actualSha" -ForegroundColor Red
+                Write-Host ""
+                Write-Host "    Refusing to hand off to claude. If you intentionally edited the doc," -ForegroundColor Red
+                Write-Host "    delete $markerFile and re-run, or re-run the bootstrap one-liner for" -ForegroundColor Red
+                Write-Host "    a clean copy:" -ForegroundColor Red
+                Write-Host "      irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex" -ForegroundColor Red
+                exit 3
+            }
+        } else {
+            Write-Host "  (no integrity marker found - pre-PR install. Continuing without verification.)" -ForegroundColor Gray
+        }
+    }
+
     if ($env:ELNORA_HANDOFF_MODE -eq "headless") {
         # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
         # we can verify what Claude actually does after the handoff, not just
@@ -1377,10 +1418,41 @@ if ($claudeAvailable) {
         # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
         # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
         # that branch explicitly).
+        #
+        # bypassPermissions gate. Three states:
+        #   1. Real CI (GITHUB_ACTIONS=true && CI=true) - proceed silently.
+        #   2. Local opt-in (ELNORA_HANDOFF_LOCAL_BYPASS=1) - print a 5-second
+        #      warning, then proceed. For Carmen-style local handoff testing.
+        #   3. Anything else - refuse. Just having ELNORA_HANDOFF_MODE=headless
+        #      isn't enough; that env var is too easy to flip from a profile
+        #      or a stray script. We want bypassPermissions to require an
+        #      explicit "yes I know what this is" gesture from a human.
+        if ($env:GITHUB_ACTIONS -eq "true" -and $env:CI -eq "true") {
+            # CI mode - proceed silently
+        } elseif ($env:ELNORA_HANDOFF_LOCAL_BYPASS -eq "1") {
+            Write-Host ""
+            Write-Host "  ============================================================" -ForegroundColor Yellow
+            Write-Host "  WARNING: about to run claude with --permission-mode bypassPermissions." -ForegroundColor Yellow
+            Write-Host "  This grants the agent full filesystem and shell access without prompts." -ForegroundColor Yellow
+            Write-Host "  Press Ctrl+C in the next 5 seconds to abort." -ForegroundColor Yellow
+            Write-Host "  ============================================================" -ForegroundColor Yellow
+            foreach ($i in 5,4,3,2,1) { Write-Host -NoNewline "  $i... "; Start-Sleep -Seconds 1 }
+            Write-Host ""
+        } else {
+            Write-Host "[!] ELNORA_HANDOFF_MODE=headless is set but no CI markers" -ForegroundColor Red
+            Write-Host "    (GITHUB_ACTIONS=true && CI=true) and no explicit local opt-in" -ForegroundColor Red
+            Write-Host "    (ELNORA_HANDOFF_LOCAL_BYPASS=1)." -ForegroundColor Red
+            Write-Host ""
+            Write-Host "    Refusing to run claude with --permission-mode bypassPermissions" -ForegroundColor Red
+            Write-Host "    outside CI without an explicit acknowledgment. Either run this in" -ForegroundColor Red
+            Write-Host "    CI, or `$env:ELNORA_HANDOFF_LOCAL_BYPASS = '1' to acknowledge that" -ForegroundColor Red
+            Write-Host "    you are about to grant the agent unprompted shell + file access." -ForegroundColor Red
+            exit 2
+        }
         $transcript = if ($env:ELNORA_HANDOFF_TRANSCRIPT) { $env:ELNORA_HANDOFF_TRANSCRIPT } else { Join-Path $env:USERPROFILE "handoff-transcript.jsonl" }
         Write-Host "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $transcript)" -ForegroundColor Cyan
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
-        # rejects the combo otherwise). --max-turns 120 caps a runaway loop;
+        # rejects the combo otherwise). --max-turns 80 caps a runaway loop;
         # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
         # create + push + verify) runs in full, so 80 leaves ~30-turn
         # headroom for transient retries (network, tool errors).
@@ -1388,7 +1460,7 @@ if ($claudeAvailable) {
             --permission-mode bypassPermissions `
             --output-format stream-json `
             --verbose `
-            --max-turns 120 `
+            --max-turns 80 `
           | Tee-Object -FilePath $transcript
         $rc = $LASTEXITCODE
         Write-Host ""

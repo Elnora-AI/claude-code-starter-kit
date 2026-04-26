@@ -980,6 +980,40 @@ if command -v claude >/dev/null 2>&1; then
         exit 0
     fi
 
+    # Verify INSTALL_FOR_AGENTS.md hasn't been tampered with since install.sh
+    # extracted the tarball. install.sh records the sha256 in
+    # .elnora-starter-kit-marker on fresh extract. If the file changed
+    # post-extract, abort - the agent shouldn't be handed off to a doc we
+    # didn't ship, especially when headless mode runs with bypassPermissions.
+    #
+    # Cases:
+    #   1. Marker + matching hash → proceed silently (the happy path).
+    #   2. Marker + mismatched hash → exit 3, point user at the recovery.
+    #   3. No marker (pre-PR existing user) → warn once and proceed. PR2
+    #      tightens this path with the H2 marker-on-existing-dir gate.
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    MARKER_FILE="$SCRIPT_DIR/.elnora-starter-kit-marker"
+    DOC_FILE="$SCRIPT_DIR/INSTALL_FOR_AGENTS.md"
+    if [ -f "$DOC_FILE" ]; then
+        if [ -f "$MARKER_FILE" ]; then
+            expected_sha=$(awk -F': ' '/^install_for_agents_sha256:/ {print $2}' "$MARKER_FILE" | tr -d '[:space:]')
+            actual_sha=$(shasum -a 256 "$DOC_FILE" | awk '{print $1}')
+            if [ -n "$expected_sha" ] && [ "$expected_sha" != "$actual_sha" ]; then
+                echo "[!] INSTALL_FOR_AGENTS.md has been modified since this starter kit was installed." >&2
+                echo "    Expected sha256: $expected_sha" >&2
+                echo "    Actual sha256:   $actual_sha" >&2
+                echo "" >&2
+                echo "    Refusing to hand off to claude. If you intentionally edited the doc," >&2
+                echo "    delete $MARKER_FILE and re-run, or re-run the bootstrap one-liner for" >&2
+                echo "    a clean copy:" >&2
+                echo "      curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash" >&2
+                exit 3
+            fi
+        else
+            echo "  (no integrity marker found - pre-PR install. Continuing without verification.)"
+        fi
+    fi
+
     if [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
         # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
         # we can verify what Claude actually does after the handoff, not just
@@ -991,10 +1025,41 @@ if command -v claude >/dev/null 2>&1; then
         # Pre-staged ELNORA_API_KEY in env lets Claude skip the "ask user
         # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
         # that branch explicitly).
+        #
+        # bypassPermissions gate. Three states:
+        #   1. Real CI (GITHUB_ACTIONS=true && CI=true) - proceed silently.
+        #   2. Local opt-in (ELNORA_HANDOFF_LOCAL_BYPASS=1) - print a 5-second
+        #      warning, then proceed. For Carmen-style local handoff testing.
+        #   3. Anything else - refuse. Just having ELNORA_HANDOFF_MODE=headless
+        #      isn't enough; that env var is too easy to flip from a shell
+        #      profile or a stray script. We want bypassPermissions to require
+        #      an explicit "yes I know what this is" gesture from a human.
+        if [ "${GITHUB_ACTIONS:-}" = "true" ] && [ "${CI:-}" = "true" ]; then
+            : # CI mode - proceed silently
+        elif [ "${ELNORA_HANDOFF_LOCAL_BYPASS:-}" = "1" ]; then
+            echo ""
+            echo "  ============================================================"
+            echo "  WARNING: about to run claude with --permission-mode bypassPermissions."
+            echo "  This grants the agent full filesystem and shell access without prompts."
+            echo "  Press Ctrl+C in the next 5 seconds to abort."
+            echo "  ============================================================"
+            for i in 5 4 3 2 1; do printf "  %s... " "$i"; sleep 1; done
+            echo ""
+        else
+            echo "[!] ELNORA_HANDOFF_MODE=headless is set but no CI markers" >&2
+            echo "    (GITHUB_ACTIONS=true && CI=true) and no explicit local opt-in" >&2
+            echo "    (ELNORA_HANDOFF_LOCAL_BYPASS=1)." >&2
+            echo "" >&2
+            echo "    Refusing to run claude with --permission-mode bypassPermissions" >&2
+            echo "    outside CI without an explicit acknowledgment. Either run this in" >&2
+            echo "    CI, or export ELNORA_HANDOFF_LOCAL_BYPASS=1 to acknowledge that" >&2
+            echo "    you are about to grant the agent unprompted shell + file access." >&2
+            exit 2
+        fi
         TRANSCRIPT="${ELNORA_HANDOFF_TRANSCRIPT:-$HOME/handoff-transcript.jsonl}"
         echo "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $TRANSCRIPT)"
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
-        # rejects the combo otherwise). --max-turns 120 caps a runaway loop;
+        # rejects the combo otherwise). --max-turns 80 caps a runaway loop;
         # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
         # create + push + verify) runs in full, so 80 leaves ~30-turn
         # headroom for transient retries (network, tool errors).
@@ -1002,7 +1067,7 @@ if command -v claude >/dev/null 2>&1; then
             --permission-mode bypassPermissions \
             --output-format stream-json \
             --verbose \
-            --max-turns 120 \
+            --max-turns 80 \
           | tee "$TRANSCRIPT"
         rc=${PIPESTATUS[0]}
         echo ""

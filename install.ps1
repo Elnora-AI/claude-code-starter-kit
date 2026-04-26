@@ -33,6 +33,8 @@ Write-Host "  1. Download the starter kit to $TargetDir"
 Write-Host "  2. Run setup-windows.ps1 (installs Claude Code + dev tools)"
 Write-Host ""
 
+$FreshExtract = $false
+
 if (Test-Path $TargetDir) {
     Write-Host "Starter kit already exists at $TargetDir" -ForegroundColor Gray
     Write-Host "Re-running setup from existing copy. Remove the folder to re-download." -ForegroundColor Gray
@@ -68,6 +70,7 @@ if (Test-Path $TargetDir) {
         New-Item -ItemType Directory -Path (Split-Path $TargetDir -Parent) -Force -ErrorAction SilentlyContinue | Out-Null
         Move-Item -Path $extracted -Destination $TargetDir -Force
         Write-Host "Extracted to $TargetDir" -ForegroundColor Green
+        $FreshExtract = $true
     } catch {
         Write-Host "[!] Failed to download starter kit from $zipUrl" -ForegroundColor Red
         Write-Host "    Reason: $($_.Exception.Message)" -ForegroundColor Red
@@ -96,6 +99,24 @@ Write-Host "Stripping dev/CI scaffolding (tests/, .github/)..." -ForegroundColor
 Remove-Item -Path (Join-Path $TargetDir "tests")   -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path (Join-Path $TargetDir ".github") -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "  Done." -ForegroundColor Gray
+
+# On fresh extract, write a marker file recording the SHA256 of
+# INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-windows.ps1
+# verifies this hash before handing off to claude with bypassPermissions —
+# if a third party tampers with the doc between extract and setup, the
+# verify step trips and the handoff aborts. This is the trust anchor for
+# the headless Phase 2 flow. PR2 (marker-based dir gate) extends the
+# schema; this PR introduces the file. Only written on FRESH extract
+# (re-bless on every run would defeat the verify).
+$markerPath = Join-Path $TargetDir ".elnora-starter-kit-marker"
+$installForAgentsPath = Join-Path $TargetDir "INSTALL_FOR_AGENTS.md"
+if ($FreshExtract -and (Test-Path -LiteralPath $installForAgentsPath)) {
+    $hash = (Get-FileHash -Path $installForAgentsPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $markerContent = "version: 1`ncreated: $now`ninstall_for_agents_sha256: $hash`n"
+    [System.IO.File]::WriteAllText($markerPath, $markerContent, [System.Text.UTF8Encoding]::new($false))
+    Write-Host "  Wrote integrity marker (.elnora-starter-kit-marker)." -ForegroundColor Gray
+}
 
 # Bypass execution policy for this process only so setup-windows.ps1 runs
 # without requiring the user to set it manually (as the older flow did).
