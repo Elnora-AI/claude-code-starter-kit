@@ -26,9 +26,14 @@ name: install-smoke-test
 #     around this by pinning the Elnora CLI version, which bypasses the
 #     installer's API-based version resolution.
 #
-# Trigger: workflow_dispatch (manual) + push to main when an install script
-# changes. Not on PRs to keep it lightweight; trigger manually via
-# `gh workflow run install-smoke-test.yml` when you want a sanity check.
+# Trigger: per-job split so PR review stays fast.
+#   - lint-ascii: auto on PR / push to main when a setup or install script
+#     changes. Cheap (~30s) — keeps the Windows-mojibake guard on every
+#     change.
+#   - macos / windows: workflow_dispatch only. Heavy (~10 min each), so
+#     we don't fire them on every PR. Run manually via
+#     `gh workflow run install-smoke-test.yml` before cutting a release
+#     or when you want a fresh-machine sanity check.
 #
 # Security: this workflow uses no untrusted inputs (no github.event.*,
 # no github.head_ref, no PR titles/bodies). Only static commands and
@@ -78,6 +83,9 @@ jobs:
 
   macos:
     name: macOS (setup-mac.sh)
+    # Manual-only — see the trigger comment block at the top of this file
+    # for why. Skipped on PR/push events.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     timeout-minutes: 20
     steps:
@@ -134,6 +142,8 @@ jobs:
 
   windows:
     name: Windows (setup-windows.ps1)
+    # Manual-only — see the matching `if:` on the macOS job above.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
