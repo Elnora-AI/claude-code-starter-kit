@@ -228,15 +228,19 @@ If any gate fails: tell the user what went wrong, ask them to re-run
 
 #### 6c. Initialize, commit, create the GitHub repo, and push
 
-1. Initialize the local repo on `main`:
+1. Initialize the local repo on `main`. If `.git/` already exists (e.g.
+   the user manually `git clone`'d the kit instead of using the
+   one-liner), strip any pre-existing remotes — this is going to be
+   *their* repo, not a fork of ours:
 
    ```
    git init -q
    git symbolic-ref HEAD refs/heads/main
+   for r in $(git remote); do git remote remove "$r"; done
    ```
 
    **Gate**: `.git/` exists; `git symbolic-ref HEAD` returns
-   `refs/heads/main`.
+   `refs/heads/main`; `git remote` prints nothing.
 
 2. Stage and commit everything:
 
