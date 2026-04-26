@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Claude Code Setup — macOS
+# Claude Code Setup - macOS
 # ============================================================
 # Installs a complete Claude Code development environment:
 # Claude Code CLI, Elnora CLI, Homebrew, Node.js, Git, Python,
@@ -10,7 +10,7 @@
 #   chmod +x setup-mac.sh && ./setup-mac.sh
 #
 # Error handling: the script CONTINUES on failure. Each step is
-# isolated — if one install fails (network, permissions, broken
+# isolated - if one install fails (network, permissions, broken
 # formula, etc.), remaining steps still run. On any failure you
 # get a structured FAILURE box with the exit code, last 10 lines
 # of captured stderr, and a remediation hint. At the end of the
@@ -21,7 +21,7 @@
 set -u
 
 # Default-on logging. Tee everything (stdout + stderr) to a log file in $HOME.
-# Overwrites on each run — re-runs are idempotent, so keeping old logs around
+# Overwrites on each run - re-runs are idempotent, so keeping old logs around
 # isn't useful. Users hitting problems can paste the file path in support chats.
 LOG_FILE="$HOME/claude-starter-install.log"
 exec > >(tee "$LOG_FILE") 2>&1
@@ -61,11 +61,11 @@ Try manually:
 Verify in a NEW terminal window:
   node --version       # should print v22.x.x
   npm --version
-node@22 is keg-only on Homebrew — the `brew link --force --overwrite` step
+node@22 is keg-only on Homebrew - the `brew link --force --overwrite` step
 is required for `node` to appear in /opt/homebrew/bin. If you prefer the
-latest Node instead of the pinned LTS, run `brew install node` — but your
+latest Node instead of the pinned LTS, run `brew install node` - but your
 Node major may then differ from the Windows workshop script's pin.
-If 'brew: command not found', brew itself isn't on PATH — fix that first
+If 'brew: command not found', brew itself isn't on PATH - fix that first
 (see the Homebrew remediation above) and re-run this script.
 EOF
             ;;
@@ -77,7 +77,7 @@ Verify:
   git --version
   which git            # should be /opt/homebrew/bin/git or /usr/local/bin/git
 macOS ships a system git at /usr/bin/git that may be older. If brew's git
-isn't being used, your PATH has /usr/bin before Homebrew — fix the order
+isn't being used, your PATH has /usr/bin before Homebrew - fix the order
 in ~/.zprofile (the brew shellenv line should come AFTER any PATH exports).
 EOF
             ;;
@@ -99,13 +99,13 @@ Try manually:
 Verify:
   python3 --version      # should print "Python 3.12.x"
   which python3          # should NOT be /usr/bin/python3 (that's the Xcode stub)
-python@3.12 is keg-only on Homebrew — the `brew link --force --overwrite`
+python@3.12 is keg-only on Homebrew - the `brew link --force --overwrite`
 step is required for `python3` to appear in /opt/homebrew/bin.
 If python3 still resolves to /usr/bin/python3 or a stale version after install:
   1. Open a NEW terminal (or: eval "$(/opt/homebrew/bin/brew shellenv)")
   2. Run `which python3` again
   3. If still wrong, your PATH has /usr/bin (or another prefix with an old
-     python3) BEFORE /opt/homebrew/bin — fix the order in ~/.zprofile. The
+     python3) BEFORE /opt/homebrew/bin - fix the order in ~/.zprofile. The
      brew shellenv line should be the LAST PATH-modifying line in the file.
 EOF
             ;;
@@ -166,7 +166,7 @@ Try manually:
   brew install --cask obsidian
 Or download the installer:
   https://obsidian.md/download
-This step is OPTIONAL — you can skip it if you don't plan to use a
+This step is OPTIONAL - you can skip it if you don't plan to use a
 knowledge base. Nothing else in this setup depends on Obsidian.
 EOF
             ;;
@@ -182,7 +182,7 @@ after a Migration Assistant restore), repair it with:
 EOF
             ;;
         *)
-            echo "No specific remediation available — scroll up to see the captured output."
+            echo "No specific remediation available - scroll up to see the captured output."
             ;;
     esac
 }
@@ -208,18 +208,18 @@ run_step() {
         return 0
     fi
     echo "" >&2
-    echo "  ┌─ FAILURE: $label" >&2
-    echo "  │ Exit code: $code" >&2
-    echo "  │ Command:   $*" >&2
+    echo "  +- FAILURE: $label" >&2
+    echo "  | Exit code: $code" >&2
+    echo "  | Command:   $*" >&2
     if [ -s "$errfile" ]; then
-        echo "  │" >&2
-        echo "  │ Captured stderr (last 10 lines):" >&2
-        tail -n 10 "$errfile" 2>/dev/null | sed 's/^/  │   /' >&2
+        echo "  |" >&2
+        echo "  | Captured stderr (last 10 lines):" >&2
+        tail -n 10 "$errfile" 2>/dev/null | sed 's/^/  |   /' >&2
     fi
-    echo "  │" >&2
-    echo "  │ What to do:" >&2
-    remediation_hint "$label" | sed 's/^/  │   /' >&2
-    echo "  └──────────────────────────────────────────────────────────" >&2
+    echo "  |" >&2
+    echo "  | What to do:" >&2
+    remediation_hint "$label" | sed 's/^/  |   /' >&2
+    echo "  +----------------------------------------------------------" >&2
     echo "" >&2
     FAILED_STEPS+=("$label (exit $code)")
     rm -f "$errfile"
@@ -234,12 +234,12 @@ echo ""
 
 # --- Prerequisite: Xcode Command Line Tools ---
 # Homebrew depends on these. On a fresh Mac the first `brew install` triggers a
-# blocking GUI dialog — we check upfront so the user isn't surprised mid-script.
+# blocking GUI dialog - we check upfront so the user isn't surprised mid-script.
 if ! xcode-select -p &>/dev/null; then
     echo "[pre] Xcode Command Line Tools are REQUIRED but not installed."
     echo ""
     echo "  A system dialog should appear asking you to install them."
-    echo "    - Click 'Install' (NOT 'Get Xcode' — the full Xcode is ~12 GB"
+    echo "    - Click 'Install' (NOT 'Get Xcode' - the full Xcode is ~12 GB"
     echo "      and is not needed; we only want the Command Line Tools)"
     echo "    - Wait for the install to finish (~5-10 minutes on fast internet)"
     echo "    - Re-run this script AFTER the install completes"
@@ -259,19 +259,19 @@ if ! xcode-select -p &>/dev/null; then
     echo ""
     # Exit non-zero so the curl | bash bootstrap (and any wrapping terminal)
     # surfaces this as a failure. Exiting 0 here made the one-liner appear
-    # to succeed while no real setup had happened — the user would close the
+    # to succeed while no real setup had happened - the user would close the
     # terminal, open VS Code, and find nothing worked.
     exit 1
 fi
 
-# --- [1/10] Claude Code CLI (installed FIRST — zero dependencies) ---
+# --- [1/10] Claude Code CLI (installed FIRST - zero dependencies) ---
 # Using Anthropic's native installer rather than the brew cask so Claude Code
 # is the very first thing on the machine. Works before brew exists, writes a
 # self-contained binary to ~/.local/bin/claude, and auto-updates itself.
 if ! command -v claude &> /dev/null; then
     echo "[1/10] Installing Claude Code..."
     echo "  Using Anthropic's native installer (no prerequisites required)."
-    # `set -o pipefail` — without it, a failed curl (404, DNS, network hiccup)
+    # `set -o pipefail` - without it, a failed curl (404, DNS, network hiccup)
     # would send empty stdin to bash, which then exits 0 and the whole step
     # looks like a silent success. pipefail propagates curl's non-zero exit
     # through the pipe so run_step can catch and remediate it.
@@ -280,13 +280,13 @@ if ! command -v claude &> /dev/null; then
         # The installer persists this to the user's shell profile for future
         # sessions, but we also export it here so the rest of this run sees it.
         export PATH="$HOME/.local/bin:$PATH"
-        echo "  Done. Version: $(claude --version 2>/dev/null || echo 'installed — restart terminal')"
+        echo "  Done. Version: $(claude --version 2>/dev/null || echo 'installed - restart terminal')"
     fi
 else
     echo "[1/10] Claude Code already installed: $(claude --version). Skipping."
 fi
 
-# --- [2/10] Elnora CLI (installed SECOND — also zero dependencies) ---
+# --- [2/10] Elnora CLI (installed SECOND - also zero dependencies) ---
 # Elnora's installer downloads a pre-built binary from GitHub releases into
 # ~/.local/bin/elnora (same dir as Claude Code), so no Node/brew required.
 # We deliberately run this before Homebrew / Node so the order stays
@@ -295,7 +295,7 @@ fi
 #
 # We always install the LATEST release so users get current bug fixes and
 # features. To keep the upgrade path tight, we re-run the installer even
-# when `elnora` is already on PATH — Elnora's installer is idempotent and a
+# when `elnora` is already on PATH - Elnora's installer is idempotent and a
 # no-op when the existing binary already matches the latest release.
 #
 # Escape hatch: set ELNORA_CLI_VERSION (e.g. "v1.5.0") to pin to a specific
@@ -314,25 +314,25 @@ fi
 if ! command -v elnora &> /dev/null; then
     echo "[2/10] Installing Elnora CLI ($elnora_install_label)..."
     echo "  Using Elnora's native installer (no prerequisites required)."
-    # pipefail — see matching comment in the Claude Code block above.
+    # pipefail - see matching comment in the Claude Code block above.
     if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $elnora_install_args"; then
         # Claude Code's step already exported PATH above, but be explicit in case
         # this script is ever re-ordered.
         export PATH="$HOME/.local/bin:$PATH"
-        echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed — restart terminal')"
+        echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed - restart terminal')"
         echo "  Next: run 'elnora auth login' after setup to authenticate (browser OAuth)."
     fi
 else
     current_elnora_version="$(elnora --version 2>/dev/null || echo 'unknown')"
-    echo "[2/10] Elnora CLI already installed ($current_elnora_version) — refreshing to $elnora_install_label..."
+    echo "[2/10] Elnora CLI already installed ($current_elnora_version) - refreshing to $elnora_install_label..."
     if run_step "Elnora CLI upgrade" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $elnora_install_args"; then
         export PATH="$HOME/.local/bin:$PATH"
-        echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed — restart terminal')"
+        echo "  Done. Version: $(elnora --version 2>/dev/null || echo 'installed - restart terminal')"
     fi
 fi
 
 # --- [3/10] Homebrew ---
-# Always try to load brew shellenv if a brew binary exists — VS Code's terminal
+# Always try to load brew shellenv if a brew binary exists - VS Code's terminal
 # can inherit a stale PATH that doesn't include brew's prefix, which would make
 # `command -v brew` return false and send us down the wrong branch.
 for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
@@ -343,7 +343,7 @@ for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
 done
 
 # Helper: append brew shellenv to the user's shell profile so new terminals pick
-# up brew automatically. Homebrew's own installer does NOT do this reliably —
+# up brew automatically. Homebrew's own installer does NOT do this reliably -
 # without it, every future terminal shows `claude: command not found` & friends.
 persist_brew_path() {
     local brew_prefix="$1"
@@ -363,7 +363,7 @@ persist_brew_path() {
 if ! command -v brew &> /dev/null; then
     echo "[3/10] Installing Homebrew..."
     echo "  Heads-up: this takes 5-15 min and will prompt for your Mac login"
-    echo "  password. Password characters won't show as you type — that's normal."
+    echo "  password. Password characters won't show as you type - that's normal."
     if /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
         if [ -x /opt/homebrew/bin/brew ]; then
             BREW_PREFIX="/opt/homebrew"
@@ -371,17 +371,17 @@ if ! command -v brew &> /dev/null; then
             BREW_PREFIX="/usr/local"
         else
             echo "" >&2
-            echo "  ┌─ FAILURE: Homebrew (binary missing after install)" >&2
-            echo "  │ The installer reported success but no brew binary was found at" >&2
-            echo "  │ /opt/homebrew/bin/brew (Apple Silicon) or /usr/local/bin/brew (Intel)." >&2
-            echo "  │" >&2
-            echo "  │ This usually means the installer exited early — e.g. a keychain" >&2
-            echo "  │ prompt was dismissed, a sudo password timed out, or the network" >&2
-            echo "  │ call to fetch the tap failed. Scroll up to see the installer output." >&2
-            echo "  │" >&2
-            echo "  │ What to do:" >&2
-            remediation_hint "Homebrew" | sed 's/^/  │   /' >&2
-            echo "  └──────────────────────────────────────────────────────────" >&2
+            echo "  +- FAILURE: Homebrew (binary missing after install)" >&2
+            echo "  | The installer reported success but no brew binary was found at" >&2
+            echo "  | /opt/homebrew/bin/brew (Apple Silicon) or /usr/local/bin/brew (Intel)." >&2
+            echo "  |" >&2
+            echo "  | This usually means the installer exited early - e.g. a keychain" >&2
+            echo "  | prompt was dismissed, a sudo password timed out, or the network" >&2
+            echo "  | call to fetch the tap failed. Scroll up to see the installer output." >&2
+            echo "  |" >&2
+            echo "  | What to do:" >&2
+            remediation_hint "Homebrew" | sed 's/^/  |   /' >&2
+            echo "  +----------------------------------------------------------" >&2
             echo "" >&2
             FAILED_STEPS+=("Homebrew (binary missing after install)")
             BREW_PREFIX=""
@@ -394,22 +394,22 @@ if ! command -v brew &> /dev/null; then
     else
         brew_code=$?
         echo "" >&2
-        echo "  ┌─ FAILURE: Homebrew (installer exited $brew_code)" >&2
-        echo "  │ The Homebrew install script did not complete successfully." >&2
-        echo "  │ Scroll up — the installer's own error output above explains why." >&2
-        echo "  │" >&2
-        echo "  │ Later brew-dependent steps (Node, Git, Python, VS Code, Claude Code," >&2
-        echo "  │ GitHub CLI, Obsidian) will also fail until Homebrew is installed." >&2
-        echo "  │" >&2
-        echo "  │ What to do:" >&2
-        remediation_hint "Homebrew" | sed 's/^/  │   /' >&2
-        echo "  └──────────────────────────────────────────────────────────" >&2
+        echo "  +- FAILURE: Homebrew (installer exited $brew_code)" >&2
+        echo "  | The Homebrew install script did not complete successfully." >&2
+        echo "  | Scroll up - the installer's own error output above explains why." >&2
+        echo "  |" >&2
+        echo "  | Later brew-dependent steps (Node, Git, Python, VS Code, Claude Code," >&2
+        echo "  | GitHub CLI, Obsidian) will also fail until Homebrew is installed." >&2
+        echo "  |" >&2
+        echo "  | What to do:" >&2
+        remediation_hint "Homebrew" | sed 's/^/  |   /' >&2
+        echo "  +----------------------------------------------------------" >&2
         echo "" >&2
         FAILED_STEPS+=("Homebrew (installer exit $brew_code)")
     fi
 else
     echo "[3/10] Homebrew already installed. Skipping."
-    # Persist the PATH even on skip — prior runs may have installed brew without
+    # Persist the PATH even on skip - prior runs may have installed brew without
     # editing the shell profile.
     if [ -x /opt/homebrew/bin/brew ]; then
         persist_brew_path "/opt/homebrew"
@@ -420,7 +420,7 @@ fi
 
 # --- [4/10] Node.js 22 LTS (pinned for Mac/Windows parity) ---
 # Pinned to the 22.x LTS line so Mac and Windows workshop attendees land on the
-# same major. node@22 is keg-only on Homebrew — without `brew link --force
+# same major. node@22 is keg-only on Homebrew - without `brew link --force
 # --overwrite` no `node` symlink appears in /opt/homebrew/bin and the rest of
 # this script's `command -v node` checks fail.
 node_major_ok=false
@@ -435,7 +435,7 @@ if ! $node_major_ok; then
     if run_step "Node.js" brew install node@22; then
         brew link --force --overwrite node@22 &>/dev/null || true
         hash -r 2>/dev/null || true
-        echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed — restart terminal')"
+        echo "  Done. Version: $(node --version 2>/dev/null || echo 'installed - restart terminal')"
     fi
 else
     echo "[4/10] Node.js already installed: $(node --version). Skipping."
@@ -448,7 +448,7 @@ if ! command -v git &> /dev/null; then
 else
     echo "[5/10] Git already installed: $(git --version). Skipping."
     # Apple's Xcode CLT ships /usr/bin/git, which is typically a few minor
-    # versions behind brew. Works fine for clone/commit/push — tell users how
+    # versions behind brew. Works fine for clone/commit/push - tell users how
     # to upgrade if they want the latest.
     if [[ "$(command -v git)" == "/usr/bin/git" ]]; then
         echo "  Note: using Apple's Xcode CLT git at /usr/bin/git (older)."
@@ -464,7 +464,7 @@ if command -v git &> /dev/null; then
         read -r -p "  Enter your full name for git commits: " input_name || input_name=""
         if [ -n "$input_name" ]; then
             if ! git config --global user.name "$input_name" 2>/dev/null; then
-                echo "  [!] 'git config --global user.name' failed — run it manually:" >&2
+                echo "  [!] 'git config --global user.name' failed - run it manually:" >&2
                 echo "      git config --global user.name \"$input_name\"" >&2
                 FAILED_STEPS+=("Git config (user.name)")
             fi
@@ -474,7 +474,7 @@ if command -v git &> /dev/null; then
         read -r -p "  Enter your email for git commits: " input_email || input_email=""
         if [ -n "$input_email" ]; then
             if ! git config --global user.email "$input_email" 2>/dev/null; then
-                echo "  [!] 'git config --global user.email' failed — run it manually:" >&2
+                echo "  [!] 'git config --global user.email' failed - run it manually:" >&2
                 echo "      git config --global user.email \"$input_email\"" >&2
                 FAILED_STEPS+=("Git config (user.email)")
             fi
@@ -486,7 +486,7 @@ if command -v git &> /dev/null; then
         git config --global init.defaultBranch main && echo "  git init.defaultBranch: main"
     fi
 else
-    echo "  [!] git not available — skipping git config." >&2
+    echo "  [!] git not available - skipping git config." >&2
     echo "      See the Git remediation in the recap at the end of this run." >&2
 fi
 
@@ -508,7 +508,7 @@ if ! $python_version_ok; then
     if run_step "Python 3.12" brew install python@3.12; then
         brew link --force --overwrite python@3.12 &>/dev/null || true
         hash -r 2>/dev/null || true
-        echo "  Done. Version: $(python3 --version 2>/dev/null || echo 'installed — restart terminal')"
+        echo "  Done. Version: $(python3 --version 2>/dev/null || echo 'installed - restart terminal')"
     fi
 else
     echo "[6/10] Python already installed: $(python3 --version). Skipping."
@@ -523,7 +523,7 @@ else
 fi
 
 # Install the `code` CLI shim so `code .` works from terminal. The cask does not
-# do this automatically — normally users have to run "Shell Command: Install
+# do this automatically - normally users have to run "Shell Command: Install
 # 'code' command in PATH" from VS Code's command palette. We symlink directly.
 VSCODE_SHIM="/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"
 if [ -x "$VSCODE_SHIM" ] && ! command -v code &> /dev/null; then
@@ -537,7 +537,7 @@ if [ -x "$VSCODE_SHIM" ] && ! command -v code &> /dev/null; then
             echo "        \"Shell Command: Install 'code' command in PATH\"" >&2
         fi
     else
-        echo "  [!] brew bin directory not writable — skipping automatic 'code' CLI shim." >&2
+        echo "  [!] brew bin directory not writable - skipping automatic 'code' CLI shim." >&2
         echo "      Workaround: open VS Code, press Cmd+Shift+P, and run" >&2
         echo "        \"Shell Command: Install 'code' command in PATH\"" >&2
     fi
@@ -551,7 +551,7 @@ else
     echo "[8/10] GitHub CLI already installed: $(gh --version | head -1). Skipping."
 fi
 
-# --- [9/10] Obsidian (optional — knowledge base) ---
+# --- [9/10] Obsidian (optional - knowledge base) ---
 if [ ! -d "/Applications/Obsidian.app" ]; then
     echo "[9/10] Installing Obsidian (optional)..."
     run_step "Obsidian" brew install --cask obsidian && echo "  Done."
@@ -567,13 +567,13 @@ if [ ! -d "$PROJECTS_DIR" ]; then
         echo "  Done."
     else
         echo "" >&2
-        echo "  ┌─ FAILURE: Projects folder" >&2
-        echo "  │ Could not create $PROJECTS_DIR" >&2
-        echo "  │ mkdir said: ${mkdir_err:-(no output)}" >&2
-        echo "  │" >&2
-        echo "  │ What to do:" >&2
-        remediation_hint "Projects folder" | sed 's/^/  │   /' >&2
-        echo "  └──────────────────────────────────────────────────────────" >&2
+        echo "  +- FAILURE: Projects folder" >&2
+        echo "  | Could not create $PROJECTS_DIR" >&2
+        echo "  | mkdir said: ${mkdir_err:-(no output)}" >&2
+        echo "  |" >&2
+        echo "  | What to do:" >&2
+        remediation_hint "Projects folder" | sed 's/^/  |   /' >&2
+        echo "  +----------------------------------------------------------" >&2
         echo "" >&2
         FAILED_STEPS+=("Projects folder")
     fi
@@ -601,12 +601,12 @@ else
     RED=""
     NC=""
 fi
-CHECK="✓"
-CROSS="✗"
+CHECK="+"
+CROSS="X"
 
 # print_status "<label>" "<version-or-empty>"
-# Empty / "not found" version => red ✗ NOT INSTALLED
-# Anything else                => green ✓ <version>
+# Empty / "not found" version => red X NOT INSTALLED
+# Anything else                => green + <version>
 print_status() {
     local label="$1"
     local version="$2"
@@ -627,9 +627,9 @@ vscode_version() {
         local plist="/Applications/Visual Studio Code.app/Contents/Info.plist"
         if [ -f "$plist" ]; then
             /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$plist" 2>/dev/null \
-                | awk '{print "installed (" $0 ") — run \"Shell Command: Install code command in PATH\" from VS Code"}'
+                | awk '{print "installed (" $0 ") - run \"Shell Command: Install code command in PATH\" from VS Code"}'
         else
-            echo "installed — run \"Shell Command: Install code command in PATH\" from VS Code"
+            echo "installed - run \"Shell Command: Install code command in PATH\" from VS Code"
         fi
     else
         echo ""
@@ -677,38 +677,38 @@ done
 if [ "$MISSING_COUNT" -eq 0 ]; then
     printf "  %sAll 8 components installed.%s\n" "$GREEN" "$NC"
 else
-    printf "  %s%d component(s) NOT installed — see red ✗ rows above and remediation below.%s\n" "$RED" "$MISSING_COUNT" "$NC"
+    printf "  %s%d component(s) NOT installed - see red X rows above and remediation below.%s\n" "$RED" "$MISSING_COUNT" "$NC"
 fi
 echo ""
 
 if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
     echo "==========================================="
-    echo "  ${#FAILED_STEPS[@]} step(s) failed — remediation below"
+    echo "  ${#FAILED_STEPS[@]} step(s) failed - remediation below"
     echo "==========================================="
     for step_entry in "${FAILED_STEPS[@]}"; do
         # Strip trailing "(exit N)" or "(...)" to recover the bare label for lookup.
         step_label="${step_entry% (*}"
         echo ""
-        echo "── $step_entry ──"
+        echo "-- $step_entry --"
         remediation_hint "$step_label"
     done
     echo ""
     echo "Once you've fixed the issue(s), re-run:  ./setup-mac.sh"
-    echo "The script is idempotent — already-installed steps are skipped."
+    echo "The script is idempotent - already-installed steps are skipped."
     echo "==========================================="
     echo ""
 fi
 
 echo "-------------------------------------------"
-echo "  IMPORTANT — to see the new PATH in VS Code:"
-echo "  Quit VS Code FULLY (Cmd+Q — not just closing the terminal)"
+echo "  IMPORTANT - to see the new PATH in VS Code:"
+echo "  Quit VS Code FULLY (Cmd+Q - not just closing the terminal)"
 echo "  and reopen it. VS Code caches its PATH at app launch time."
 echo "  If you ran this in Terminal.app, just open a new window."
 echo "-------------------------------------------"
 echo ""
 
 echo "==========================================="
-echo "  Phase 1 complete — handing off to Claude"
+echo "  Phase 1 complete - handing off to Claude"
 echo "==========================================="
 echo ""
 
@@ -729,7 +729,7 @@ if [ -n "${GITHUB_PATH:-}" ]; then
 fi
 
 # The exact prompt handed to Claude. Defined once so the headless test mode
-# below uses byte-for-byte the same string as the production handoff —
+# below uses byte-for-byte the same string as the production handoff -
 # divergence here is the bug headless mode is supposed to catch.
 HANDOFF_PROMPT="Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at ~/claude-starter-install.log."
 
@@ -738,14 +738,14 @@ if command -v claude >/dev/null 2>&1; then
         # CI/test escape hatch: print what would happen and exit cleanly. Used
         # by .github/workflows/install-smoke-test.yml so the smoke test doesn't
         # hang on Claude trying to open a browser for first-run auth.
-        echo "ELNORA_SKIP_HANDOFF=1 set — would exec claude with the Phase 2 prompt. Skipping for non-interactive run."
+        echo "ELNORA_SKIP_HANDOFF=1 set - would exec claude with the Phase 2 prompt. Skipping for non-interactive run."
         exit 0
     fi
 
     if [ "${ELNORA_HANDOFF_MODE:-}" = "headless" ]; then
         # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
         # we can verify what Claude actually does after the handoff, not just
-        # that the handoff fired. Same prompt, same cwd as production — only
+        # that the handoff fired. Same prompt, same cwd as production - only
         # the I/O wrapper changes (one-shot print mode + bypassPermissions
         # because nobody's there to approve tool calls).
         #
@@ -754,7 +754,7 @@ if command -v claude >/dev/null 2>&1; then
         # for the API key" step in INSTALL_FOR_AGENTS.md (the doc handles
         # that branch explicitly).
         TRANSCRIPT="${ELNORA_HANDOFF_TRANSCRIPT:-$HOME/handoff-transcript.jsonl}"
-        echo "ELNORA_HANDOFF_MODE=headless — running claude -p (transcript: $TRANSCRIPT)"
+        echo "ELNORA_HANDOFF_MODE=headless - running claude -p (transcript: $TRANSCRIPT)"
         # --verbose is REQUIRED with -p --output-format=stream-json (Claude Code
         # rejects the combo otherwise). --max-turns 50 caps a runaway loop;
         # Phase 2 should fit comfortably under 30 turns.
@@ -770,17 +770,17 @@ if command -v claude >/dev/null 2>&1; then
         exit "$rc"
     fi
 
-    echo "Starting Claude — it will read INSTALL_FOR_AGENTS.md and finish setup."
+    echo "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup."
     echo "On first run, your browser will open to log into your Claude Pro/Max account."
     echo ""
-    # exec replaces this shell — Claude takes over with the initial prompt loaded.
+    # exec replaces this shell - Claude takes over with the initial prompt loaded.
     # If exec fails (no TTY, broken install), the lines below print as a fallback.
     exec claude "$HANDOFF_PROMPT"
 fi
 
-# Fallback: claude not on PATH (install of Claude Code itself failed) — show
+# Fallback: claude not on PATH (install of Claude Code itself failed) - show
 # the manual continuation path so the user can recover after fixing the issue.
-echo "  ⚠  'claude' command not found — Claude Code install may have failed."
+echo "  !  'claude' command not found - Claude Code install may have failed."
 echo ""
 echo "  See the remediation hints above. Once you've fixed it, re-run:"
 echo "      ./setup-mac.sh"
@@ -791,7 +791,7 @@ echo "      claude"
 echo "      Then say: 'Read INSTALL_FOR_AGENTS.md and finish setup.'"
 echo ""
 
-# Exit 0 even if some steps failed — the remediation recap tells the user exactly
+# Exit 0 even if some steps failed - the remediation recap tells the user exactly
 # what to do, and a non-zero exit would trip callers (e.g. IDE terminals that
 # highlight failures) in ways that can hide the remediation text above.
 exit 0

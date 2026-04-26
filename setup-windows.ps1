@@ -1,5 +1,5 @@
 # ============================================================
-# Claude Code Setup — Windows
+# Claude Code Setup - Windows
 # ============================================================
 # Installs a complete Claude Code development environment:
 # Claude Code CLI, Elnora CLI, Node.js, Git, Python, VS Code,
@@ -10,7 +10,7 @@
 #   .\setup-windows.ps1
 #
 # Error handling: the script CONTINUES on failure. Each step is
-# isolated — if one install fails (network, winget glitch, broken
+# isolated - if one install fails (network, winget glitch, broken
 # manifest, etc.), remaining steps still run. On any failure you
 # get a structured FAILURE box with the exit code, last 10 lines
 # of captured output, and a remediation hint. At the end of the
@@ -23,7 +23,7 @@ $ErrorActionPreference = "Continue"
 
 # Default-on logging. Start-Transcript captures all Write-Host, Write-Error,
 # AND native command output (winget, git, etc.) in PS 5.1+. Overwrites on each
-# run — re-runs are idempotent, so keeping old logs around isn't useful.
+# run - re-runs are idempotent, so keeping old logs around isn't useful.
 $LogFile = Join-Path $env:USERPROFILE "claude-starter-install.log"
 try { Start-Transcript -Path $LogFile -Force | Out-Null } catch { }
 
@@ -32,19 +32,19 @@ $FailedSteps = New-Object System.Collections.ArrayList
 function Update-SessionPath {
     # Reload PATH from the registry so this session sees binaries added by a
     # just-run installer. Without this, `winget install Git.Git` succeeds but
-    # `Get-Command git` still fails until the user restarts PowerShell —
+    # `Get-Command git` still fails until the user restarts PowerShell -
     # which would make the git-config block (and the verify summary) wrong.
     $machine = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $user    = [System.Environment]::GetEnvironmentVariable("Path", "User")
     $parts   = @()
     if ($machine) { $parts += $machine }
     if ($user)    { $parts += $user }
-    # Claude Code installer writes to %USERPROFILE%\.local\bin — ensure it's present.
+    # Claude Code installer writes to %USERPROFILE%\.local\bin - ensure it's present.
     $claudeBin = Join-Path $env:USERPROFILE ".local\bin"
     if ((Test-Path $claudeBin) -and ($parts -notcontains $claudeBin)) {
         $parts += $claudeBin
     }
-    # Elnora CLI installer writes to %USERPROFILE%\.elnora\bin — ensure it's present.
+    # Elnora CLI installer writes to %USERPROFILE%\.elnora\bin - ensure it's present.
     $elnoraBin = Join-Path $env:USERPROFILE ".elnora\bin"
     if ((Test-Path $elnoraBin) -and ($parts -notcontains $elnoraBin)) {
         $parts += $elnoraBin
@@ -88,7 +88,7 @@ Or download the installer:
 Verify in a NEW PowerShell window:
   node --version    # should print vXX.X.X
   npm --version
-If `node` still isn't found after a new terminal, your PATH didn't update —
+If `node` still isn't found after a new terminal, your PATH didn't update -
 check: Get-Command node  and:  $env:Path -split ';' | Select-String node
 '@
     }
@@ -123,7 +123,7 @@ If the Microsoft Store keeps intercepting `python`:
   2. Turn OFF BOTH `python.exe` and `python3.exe`
   3. Reopen PowerShell and run:  python --version
 Verify:
-  python --version   # should print "Python 3.x.x" — NOT open the Store
+  python --version   # should print "Python 3.x.x" - NOT open the Store
 If `python` still opens the Store but real Python is installed, use the
 `py` launcher instead (lives at C:\Windows\py.exe, always available):
   py --version
@@ -200,7 +200,7 @@ Try manually:
   winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements
 Or download the installer:
   https://obsidian.md/download
-This step is OPTIONAL — you can skip it if you don't plan to use a
+This step is OPTIONAL - you can skip it if you don't plan to use a
 knowledge base. Nothing else in this setup depends on Obsidian.
 '@
     }
@@ -218,7 +218,7 @@ made Documents read-only. In that case, pick a different parent folder:
 '@
     }
     else {
-        return "No specific remediation available — scroll up to see the captured output."
+        return "No specific remediation available - scroll up to see the captured output."
     }
 }
 
@@ -294,7 +294,7 @@ function Invoke-Step {
 }
 
 function Test-RealPython {
-    # Windows ships with a Microsoft Store "app execution alias" for `python` —
+    # Windows ships with a Microsoft Store "app execution alias" for `python` -
     # a 0-byte stub at %LOCALAPPDATA%\Microsoft\WindowsApps\python.exe that opens
     # the Store instead of running Python. Get-Command returns true for the stub,
     # so we have to actually invoke it and check the output.
@@ -309,7 +309,7 @@ function Test-RealPython {
 
 function Remove-PythonStoreAlias {
     # Deletes the 0-byte Store stub so real Python (installed via winget) wins
-    # PATH lookup. We only delete if the file is actually a 0-byte stub — never
+    # PATH lookup. We only delete if the file is actually a 0-byte stub - never
     # touch a real python.exe.
     $stub = "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"
     if (-not (Test-Path $stub)) { return $false }
@@ -329,22 +329,22 @@ function Remove-PythonStoreAlias {
 }
 
 function Copy-StandaloneExeToWindowsApps {
-    # Copies a self-contained .exe into %LOCALAPPDATA%\Microsoft\WindowsApps —
+    # Copies a self-contained .exe into %LOCALAPPDATA%\Microsoft\WindowsApps -
     # always in the default user PATH on Win10/11 and immune to Group Policy
     # PATH reverts. Only safe for single-binary tools (Go binaries like gh.exe,
-    # bundled binaries like claude.exe). Do NOT use for Python — python.exe
+    # bundled binaries like claude.exe). Do NOT use for Python - python.exe
     # depends on neighbouring DLLs that won't travel with the copy.
     param(
         [Parameter(Mandatory)][string]$ExePath,
         [Parameter(Mandatory)][string]$ToolName
     )
     if (-not (Test-Path $ExePath)) {
-        Write-Host "  [!] Source exe not found at $ExePath — cannot copy." -ForegroundColor Red
+        Write-Host "  [!] Source exe not found at $ExePath - cannot copy." -ForegroundColor Red
         return $false
     }
     $windowsApps = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
     if (-not (Test-Path $windowsApps)) {
-        Write-Host "  [!] WindowsApps folder not found at $windowsApps — unusual for Win10/11." -ForegroundColor Red
+        Write-Host "  [!] WindowsApps folder not found at $windowsApps - unusual for Win10/11." -ForegroundColor Red
         Write-Host "      You can add $((Split-Path $ExePath -Parent)) to your User PATH manually:" -ForegroundColor Red
         Write-Host "        [Environment]::SetEnvironmentVariable('Path', `"`$env:Path;$((Split-Path $ExePath -Parent))`", 'User')" -ForegroundColor Red
         return $false
@@ -352,7 +352,7 @@ function Copy-StandaloneExeToWindowsApps {
     try {
         Copy-Item $ExePath (Join-Path $windowsApps "$ToolName.exe") -Force -ErrorAction Stop
         Write-Host "  Copied $ToolName.exe to WindowsApps (GP-immune PATH fallback)." -ForegroundColor Green
-        Write-Host "  Note: this copy will not auto-update — re-run the script after upstream releases." -ForegroundColor Gray
+        Write-Host "  Note: this copy will not auto-update - re-run the script after upstream releases." -ForegroundColor Gray
         return $true
     } catch {
         Write-Host "  [!] Fallback copy for $ToolName failed:" -ForegroundColor Red
@@ -394,12 +394,12 @@ if (-not $hasWinget) {
     # installers (Claude Code uses irm|iex, not winget).
     $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $hasWinget) {
-        Write-Host "  [!] winget still not found — winget-based steps will fail below." -ForegroundColor Red
+        Write-Host "  [!] winget still not found - winget-based steps will fail below." -ForegroundColor Red
         [void]$FailedSteps.Add("winget (prerequisite missing)")
     }
 }
 
-# --- [1/9] Claude Code CLI (installed FIRST — zero dependencies) ---
+# --- [1/9] Claude Code CLI (installed FIRST - zero dependencies) ---
 # Using Anthropic's native installer so Claude Code is the very first thing on
 # the machine. Works even when winget is missing (unlike the rest of the tools
 # below). Writes a self-contained binary to %USERPROFILE%\.local\bin\claude.exe.
@@ -408,7 +408,7 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "  Using Anthropic's native installer (no prerequisites required)." -ForegroundColor Gray
     # Run the installer in a child powershell.exe. `iex` evaluates its input in
     # caller scope, so an `exit N` inside the fetched installer would terminate
-    # setup-windows.ps1 itself — skipping every later step and the end-of-run
+    # setup-windows.ps1 itself - skipping every later step and the end-of-run
     # recap. The sub-process contains `exit`, propagates the exit code back via
     # $LASTEXITCODE for Invoke-Step to detect, and isolates any
     # $ErrorActionPreference changes made by the installer.
@@ -423,14 +423,14 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 
     # The Anthropic installer writes claude.exe to %USERPROFILE%\.local\bin and
     # updates User PATH via setx. Corporate Group Policy can silently revert
-    # User PATH — user opens a new terminal, claude is gone. Detect and fall
+    # User PATH - user opens a new terminal, claude is gone. Detect and fall
     # back to WindowsApps (default user PATH, GP-immune).
     $claudeBinDir = Join-Path $env:USERPROFILE ".local\bin"
     $claudeExe    = Join-Path $claudeBinDir "claude.exe"
     if (-not (Test-Path $claudeExe)) {
         # Installer reported success but the binary isn't on disk. If Invoke-Step
         # already logged a non-zero exit, skip to avoid duplicate entries in the
-        # recap — the existing failure already routes to the right remediation.
+        # recap - the existing failure already routes to the right remediation.
         $alreadyLogged = @($FailedSteps | Where-Object { $_ -like "Claude Code*" }).Count -gt 0
         if (-not $alreadyLogged) {
             Write-Host "  [!] Installer completed but claude.exe is missing at $claudeExe." -ForegroundColor Red
@@ -439,7 +439,7 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     } else {
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$claudeBinDir*") {
-            Write-Host "  [!] User PATH did not persist '.local\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+            Write-Host "  [!] User PATH did not persist '.local\bin' - Group Policy may be reverting." -ForegroundColor Yellow
             Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
             if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
                 [void]$FailedSteps.Add("Claude Code PATH")
@@ -450,13 +450,13 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "[1/9] Claude Code already installed: $(claude --version). Skipping." -ForegroundColor Gray
 }
 
-# --- [2/9] Elnora CLI (installed SECOND — also zero dependencies) ---
+# --- [2/9] Elnora CLI (installed SECOND - also zero dependencies) ---
 # Elnora's installer downloads a pre-built binary to %USERPROFILE%\.elnora\bin
 # and updates User PATH. No winget/Node required. "AI surfaces first,
 # toolchain second" mirrors the macOS script.
 # We always install the LATEST release so users get current bug fixes and
 # features. To keep the upgrade path tight, we re-run the installer even
-# when `elnora` is already on PATH — Elnora's installer is idempotent and a
+# when `elnora` is already on PATH - Elnora's installer is idempotent and a
 # no-op when the existing binary already matches the latest release.
 #
 # Escape hatch: set $env:ELNORA_CLI_VERSION (e.g. "v1.5.0") to pin to a
@@ -487,9 +487,9 @@ if (-not $elnoraIsInstalled) {
     # Sub-process isolation: see matching comment in the Claude Code block above.
     # The Elnora installer has 8 `exit 1` paths (GitHub API failure, 404 on
     # ARM64 Windows since no win-arm64 asset is published, AV-blocked copy,
-    # etc.) — without the sub-process, any one of them would kill
+    # etc.) - without the sub-process, any one of them would kill
     # setup-windows.ps1 mid-run.
-    # Leading SecurityProtocol assignment forces TLS 1.2 on PS 5.1 — see the
+    # Leading SecurityProtocol assignment forces TLS 1.2 on PS 5.1 - see the
     # Claude Code block above for the full reasoning.
     # The scriptblock-create dance is needed to pass -Version to the installer.
     # iex evaluates a string in caller scope and ignores trailing -Version
@@ -504,7 +504,7 @@ if (-not $elnoraIsInstalled) {
     Invoke-Step "Elnora CLI" { powershell.exe -NoProfile -ExecutionPolicy Bypass -Command $elnoraInstallerCommand }
     Update-SessionPath
 
-    # Same Group Policy fallback as Claude Code — copy the exe into WindowsApps
+    # Same Group Policy fallback as Claude Code - copy the exe into WindowsApps
     # if User PATH didn't pick up .elnora\bin.
     $elnoraBinDir = Join-Path $env:USERPROFILE ".elnora\bin"
     $elnoraExe    = Join-Path $elnoraBinDir "elnora.exe"
@@ -517,7 +517,7 @@ if (-not $elnoraIsInstalled) {
     } else {
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$elnoraBinDir*") {
-            Write-Host "  [!] User PATH did not persist '.elnora\bin' — Group Policy may be reverting." -ForegroundColor Yellow
+            Write-Host "  [!] User PATH did not persist '.elnora\bin' - Group Policy may be reverting." -ForegroundColor Yellow
             Write-Host "      Attempting fallback: copy elnora.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
             if (-not (Copy-StandaloneExeToWindowsApps -ExePath $elnoraExe -ToolName "elnora")) {
                 [void]$FailedSteps.Add("Elnora CLI PATH")
@@ -593,12 +593,12 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
         [void]$FailedSteps.Add("Git config ($($_.Exception.Message))")
     }
 } else {
-    Write-Host "  [!] git not available — skipping git config." -ForegroundColor Red
+    Write-Host "  [!] git not available - skipping git config." -ForegroundColor Red
     Write-Host "      See the Git remediation in the recap at the end of this run." -ForegroundColor Red
 }
 
 # --- [5/9] Python 3.12 ---
-# Test-RealPython rejects the Microsoft Store stub alias — Get-Command alone
+# Test-RealPython rejects the Microsoft Store stub alias - Get-Command alone
 # would return a false positive on a fresh Windows laptop.
 if (-not (Test-RealPython)) {
     Write-Host "[5/9] Installing Python 3.12..." -ForegroundColor Green
@@ -613,7 +613,7 @@ if (-not (Test-RealPython)) {
             Update-SessionPath
         }
         if (-not (Test-RealPython)) {
-            # Python isn't a single binary — it depends on neighbouring DLLs —
+            # Python isn't a single binary - it depends on neighbouring DLLs -
             # so we can't use the WindowsApps copy trick. Tell the user how to
             # fix PATH manually, and point them at the py launcher as a fallback
             # (py.exe lives in C:\Windows and is always on Machine PATH).
@@ -673,7 +673,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
     Update-SessionPath
 
-    # gh is a standalone Go binary — safe to copy to WindowsApps as a PATH
+    # gh is a standalone Go binary - safe to copy to WindowsApps as a PATH
     # fallback if the User/Machine PATH update didn't stick (GP, or new session
     # env not refreshed in time).
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -684,7 +684,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         )
         $ghExe = $ghCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
         if ($ghExe) {
-            Write-Host "  [!] gh installed to $ghExe but not on PATH — applying WindowsApps fallback." -ForegroundColor Yellow
+            Write-Host "  [!] gh installed to $ghExe but not on PATH - applying WindowsApps fallback." -ForegroundColor Yellow
             if (-not (Copy-StandaloneExeToWindowsApps -ExePath $ghExe -ToolName "gh")) {
                 [void]$FailedSteps.Add("GitHub CLI PATH")
             }
@@ -699,7 +699,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Host "[7/9] GitHub CLI already installed: $(gh --version | Select-Object -First 1). Skipping." -ForegroundColor Gray
 }
 
-# --- [8/9] Obsidian (optional — knowledge base) ---
+# --- [8/9] Obsidian (optional - knowledge base) ---
 $obsidianPaths = @(
     "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
     "$env:LOCALAPPDATA\Programs\Obsidian\Obsidian.exe",
@@ -709,7 +709,7 @@ $obsidianPaths = @(
 )
 $obsidianInstalled = [bool]($obsidianPaths | Where-Object { Test-Path $_ } | Select-Object -First 1)
 if (-not $obsidianInstalled -and $hasWinget) {
-    # Fall back to winget — catches installs in non-standard locations. Gated
+    # Fall back to winget - catches installs in non-standard locations. Gated
     # on $hasWinget so that on machines without winget (some Win10 builds, the
     # GitHub Actions windows-2022 runner), this doesn't surface a raw "term not
     # recognized" error to stderr and confuse the user.
@@ -752,7 +752,7 @@ Write-Host ""
 Update-SessionPath
 
 # Force UTF-8 output so the unicode check / cross marks render. PS 5.1 defaults
-# to OEM codepage which mangles them — without this, ✓ shows as garbled bytes
+# to OEM codepage which mangles them - without this, ✓ shows as garbled bytes
 # in the very summary row that's supposed to scream "all good".
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
@@ -911,7 +911,7 @@ if ($env:GITHUB_PATH) {
 try { Stop-Transcript | Out-Null } catch { }
 
 # The exact prompt handed to Claude. Defined once so the headless test mode
-# below uses byte-for-byte the same string as the production handoff —
+# below uses byte-for-byte the same string as the production handoff -
 # divergence here is the bug headless mode is supposed to catch.
 $HandoffPrompt = "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup. The Phase 1 install log is at $env:USERPROFILE\claude-starter-install.log."
 
@@ -928,7 +928,7 @@ if ($claudeAvailable) {
     if ($env:ELNORA_HANDOFF_MODE -eq "headless") {
         # Headless E2E test mode. Used by .github/workflows/handoff-e2e.yml so
         # we can verify what Claude actually does after the handoff, not just
-        # that the handoff fired. Same prompt, same cwd as production — only
+        # that the handoff fired. Same prompt, same cwd as production - only
         # the I/O wrapper changes (one-shot print mode + bypassPermissions
         # because nobody's there to approve tool calls).
         #
@@ -956,13 +956,13 @@ if ($claudeAvailable) {
     Write-Host "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup." -ForegroundColor White
     Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
     Write-Host ""
-    # PowerShell has no `exec` — call claude as a child process and let it own
+    # PowerShell has no `exec` - call claude as a child process and let it own
     # the terminal until it exits. Then the script exits cleanly.
     & claude $HandoffPrompt
     exit 0
 }
 
-# Fallback: claude not on PATH (install of Claude Code itself failed) — show
+# Fallback: claude not on PATH (install of Claude Code itself failed) - show
 # the manual continuation path so the user can recover after fixing the issue.
 Write-Host "  ! 'claude' command not found - Claude Code install may have failed." -ForegroundColor Yellow
 Write-Host ""
@@ -975,7 +975,7 @@ Write-Host "      claude"
 Write-Host "      Then say: 'Read INSTALL_FOR_AGENTS.md and finish setup.'"
 Write-Host ""
 
-# Exit 0 even if some steps failed — the remediation recap above tells the user
+# Exit 0 even if some steps failed - the remediation recap above tells the user
 # exactly what to do, and a non-zero exit would trip callers (e.g. IDE terminals
 # that highlight failures) in ways that can hide the remediation text.
 exit 0
