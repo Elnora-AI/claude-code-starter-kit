@@ -26,8 +26,8 @@ mode, follow these adjustments:
   resolve X from the environment or filesystem instead, or skip the step.
 - **Step 3-4 (Elnora API key):** if `ELNORA_API_KEY` is already set in the
   environment, use it directly. Skip the "Open the dashboard, click Create
-  key, paste it back" instructions. Still write `.env` and run `elnora auth
-  whoami`.
+  key, paste it back" instructions. Still write `.env` and run `elnora
+  whoami` (top-level command, NOT `elnora auth whoami`).
 - **Step 8 (Knowledge base):** the test stages a fake Obsidian vault at
   `~/Documents/test-vault/` (or `%USERPROFILE%\Documents\test-vault\` on
   Windows). Auto-detect it, write `.claude/knowledge-base.local.md`, AND
@@ -46,7 +46,7 @@ mode, follow these adjustments:
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
   4. `CLAUDE.md` no longer contains the `### First-run setup` heading or
      its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
-  5. `elnora auth whoami` and `elnora doctor` (or `elnora protocol list`)
+  5. `elnora whoami` and `elnora doctor` (or `elnora protocols list`)
      completed without authentication errors.
 - **At the end:** print the literal string `HANDOFF_COMPLETE` on its own
   line. The test runner uses it as the completion marker. Do NOT print
@@ -128,12 +128,15 @@ grep -c '^ELNORA_API_KEY=elnora_live_' .env  # should print 1
 ### 5. Verify the key works
 
 ```
-elnora auth whoami
+elnora whoami
 ```
 
 This should return the user's email. If it errors with 401/403, the key is
 wrong — go back to step 4. If it errors with a network message, see
 `RECOVERY.md` → "Network blocked".
+
+> Note: it's `elnora whoami` (top-level), NOT `elnora auth whoami`.
+> The `auth` subcommand only has `login | status | logout | profiles | validate`.
 
 ### 6. Make this a git repo (seed-repo step)
 
