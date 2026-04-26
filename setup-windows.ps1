@@ -393,29 +393,67 @@ Write-Host "===========================================" -ForegroundColor Cyan
 Write-Host "  Log: $LogFile" -ForegroundColor Gray
 Write-Host ""
 
+# --- winget progress-bar noise filter ---
+# winget redraws an ASCII progress bar 100+ times per package (downloading,
+# verifying, installing). When 2>&1 captures stderr into the line-buffered
+# pipeline that Invoke-Step iterates, each redraw becomes its own line in
+# the live output AND in the install transcript. Across Node + Git + Python
+# + VS Code + GitHub CLI + Obsidian that's 200+ lines of pure noise and
+# obscures real errors.
+#
+# Drop lines that are pure progress-bar content: solid block / shade chars
+# (U+2588, U+2592, U+2591, plus the half-block family U+2580..U+2590), the
+# trailing percentage indicator, and the byte/byte rate readouts winget
+# emits during downloads. Real error/info lines from winget are full prose
+# ("Found Microsoft.VisualStudioCode...", "Successfully installed",
+# "Installer hash does not match", etc.) and don't match.
+#
+# Pattern uses .NET regex \uXXXX escapes (ASCII source bytes) so the file
+# stays clean for the ASCII-lint check; the regex engine still matches the
+# real Unicode glyphs at runtime.
+#
+# These lines are still recorded in Invoke-Step's capture buffer, so if a
+# winget call exits non-zero the FAILURE box still has the full byte trail
+# for debugging.
+$wingetNoisePattern = '^[\s\u2580-\u2593\-]+$|^\s*\d+(\.\d+)?\s*%\s*$|^\s*\d+(\.\d+)?\s*[KMG]?B\s*/\s*\d+(\.\d+)?\s*[KMG]?B\s*$|^[\s\u2580-\u2593]+\s*\d+(\.\d+)?\s*%\s*$'
+
 # --- Check for winget ---
 $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
 if (-not $hasWinget) {
-    Write-Host ""
-    Write-Host "  +-- PREREQUISITE: winget not found" -ForegroundColor Yellow
-    Write-Host "  |" -ForegroundColor Yellow
-    Write-Host "  |   winget is the Windows package manager used by this script to" -ForegroundColor Yellow
-    Write-Host "  |   install Node.js, Python, VS Code, GitHub CLI, and Obsidian." -ForegroundColor Yellow
-    Write-Host "  |" -ForegroundColor Yellow
-    Write-Host "  |   What to do:" -ForegroundColor Yellow
-    foreach ($line in ((Get-RemediationHint -Label "winget") -split "`r?`n")) {
-        Write-Host "  |     $line" -ForegroundColor Yellow
-    }
-    Write-Host "  +-----------------------------------------------------------" -ForegroundColor Yellow
-    Write-Host ""
-    Read-Host "Press Enter AFTER installing winget (script will retry), or Ctrl+C to exit"
-    # Re-check; if still missing, most steps will fail but we let them run so
-    # the user sees the full picture and can take action on any that use direct
-    # installers (Claude Code uses irm|iex, not winget).
-    $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
-    if (-not $hasWinget) {
-        Write-Host "  [!] winget still not found - winget-based steps will fail below." -ForegroundColor Red
-        [void]$FailedSteps.Add("winget (prerequisite missing)")
+    if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        # CI/non-interactive path. windows-2022 GitHub Actions runners do not
+        # ship winget, and the smoke test deliberately sets
+        # ELNORA_SKIP_OPTIONAL_INSTALLS=1 to opt out of every winget-backed
+        # tool (Node, Git, Python, VS Code, GitHub CLI, Obsidian). Do NOT
+        # block on Read-Host (no TTY) and do NOT record a FAILURE - it's a
+        # documented skipped state, not a real install failure. Each
+        # downstream winget step is also gated below so they print [SKIP]
+        # instead of recording their own failures.
+        Write-Host ""
+        Write-Host "  [SKIP] winget not found - ELNORA_SKIP_OPTIONAL_INSTALLS=1, skipping every winget-backed step." -ForegroundColor DarkGray
+        Write-Host ""
+    } else {
+        Write-Host ""
+        Write-Host "  +-- PREREQUISITE: winget not found" -ForegroundColor Yellow
+        Write-Host "  |" -ForegroundColor Yellow
+        Write-Host "  |   winget is the Windows package manager used by this script to" -ForegroundColor Yellow
+        Write-Host "  |   install Node.js, Python, VS Code, GitHub CLI, and Obsidian." -ForegroundColor Yellow
+        Write-Host "  |" -ForegroundColor Yellow
+        Write-Host "  |   What to do:" -ForegroundColor Yellow
+        foreach ($line in ((Get-RemediationHint -Label "winget") -split "`r?`n")) {
+            Write-Host "  |     $line" -ForegroundColor Yellow
+        }
+        Write-Host "  +-----------------------------------------------------------" -ForegroundColor Yellow
+        Write-Host ""
+        Read-Host "Press Enter AFTER installing winget (script will retry), or Ctrl+C to exit"
+        # Re-check; if still missing, most steps will fail but we let them run so
+        # the user sees the full picture and can take action on any that use direct
+        # installers (Claude Code uses irm|iex, not winget).
+        $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
+        if (-not $hasWinget) {
+            Write-Host "  [!] winget still not found - winget-based steps will fail below." -ForegroundColor Red
+            [void]$FailedSteps.Add("winget (prerequisite missing)")
+        }
     }
 }
 
@@ -509,7 +547,7 @@ $elnoraInstallerCommand = if ($elnoraCliVersion) {
 # user-facing output while keeping them in the FAILURE-box capture buffer
 # in case the installer ever does fail in this mode and we need the bytes.
 # Real interactive users (no ELNORA_SKIP_HANDOFF) see everything as before.
-if ($env:ELNORA_SKIP_HANDOFF -eq "1") {
+if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless") {
     $elnoraNoisePattern = '"error":\s*"API key is required|"code":\s*"VALIDATION_ERROR"|"suggestion":\s*"Get your API key|^\s*\{\s*$|^\s*\}\s*$|System\.Management\.Automation\.RemoteException'
 } else {
     $elnoraNoisePattern = ""
@@ -601,6 +639,10 @@ if (-not $nodeMajorOk) {
     if (-not $hasWinget) {
         if ($nodeCurrentVersion) {
             Write-Host "[3/9] Node.js: detected $nodeCurrentVersion (older than LTS 22). winget is not available, so the upgrade can't run automatically. Keeping the current version. To upgrade manually, install winget (Microsoft Store > 'App Installer') and re-run, or download Node 22+ from https://nodejs.org/." -ForegroundColor Yellow
+        } elseif ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+            # CI smoke test on a winget-less runner. Skipped, not failed -
+            # see the matching pre-check at the top of the script.
+            Write-Host "[3/9] Node.js: ELNORA_SKIP_OPTIONAL_INSTALLS=1 and winget unavailable - skipping." -ForegroundColor Gray
         } else {
             Write-Host "[3/9] Node.js not found and winget is not available. Install Node 22+ manually from https://nodejs.org/ and re-run this script." -ForegroundColor Red
             [void]$FailedSteps.Add("Node.js (winget unavailable, no fallback)")
@@ -611,7 +653,7 @@ if (-not $nodeMajorOk) {
         } else {
             Write-Host "[3/9] Installing Node.js LTS (>=22)..." -ForegroundColor Green
         }
-        Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements }
+        Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
         Update-SessionPath
     }
 } else {
@@ -620,9 +662,14 @@ if (-not $nodeMajorOk) {
 
 # --- [4/9] Git + user config ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[4/9] Installing Git..." -ForegroundColor Green
-    Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements }
-    Update-SessionPath
+    if (-not $hasWinget -and $env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        # CI smoke test on a winget-less runner - documented soft skip.
+        Write-Host "[4/9] Git: ELNORA_SKIP_OPTIONAL_INSTALLS=1 and winget unavailable - skipping." -ForegroundColor Gray
+    } else {
+        Write-Host "[4/9] Installing Git..." -ForegroundColor Green
+        Invoke-Step "Git" { winget install Git.Git --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
+        Update-SessionPath
+    }
 } else {
     Write-Host "[4/9] Git already installed: $(git --version). Skipping." -ForegroundColor Gray
 }
@@ -677,10 +724,14 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
 # Test-RealPython rejects the Microsoft Store stub alias - Get-Command alone
 # would return a false positive on a fresh Windows laptop.
 if (-not (Test-RealPython)) {
+    if (-not $hasWinget -and $env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        # CI smoke test on a winget-less runner - documented soft skip.
+        Write-Host "[5/9] Python 3.12: ELNORA_SKIP_OPTIONAL_INSTALLS=1 and winget unavailable - skipping." -ForegroundColor Gray
+    } else {
     Write-Host "[5/9] Installing Python 3.12..." -ForegroundColor Green
     # Remove the Store stub BEFORE install so winget's install doesn't get shadowed.
     [void](Remove-PythonStoreAlias)
-    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements }
+    Invoke-Step "Python 3.12" { winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
     Update-SessionPath
     # After install, if the Store stub is still intercepting (winget added a new
     # one, or PATH order is wrong), remove it and refresh PATH once more.
@@ -716,6 +767,7 @@ if (-not (Test-RealPython)) {
             [void]$FailedSteps.Add("Python 3.12 (PATH/alias issue)")
         }
     }
+    }
 } else {
     Write-Host "[5/9] Python already installed: $(python --version). Skipping." -ForegroundColor Gray
 }
@@ -737,7 +789,7 @@ if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
     Write-Host "[6/9] VS Code: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run." -ForegroundColor Gray
 } elseif (-not $codeInstalled) {
     Write-Host "[6/9] Installing VS Code..." -ForegroundColor Green
-    Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements }
+    Invoke-Step "VS Code" { winget install Microsoft.VisualStudioCode --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
     Update-SessionPath
 } else {
     Write-Host "[6/9] VS Code already installed. Skipping." -ForegroundColor Gray
@@ -745,30 +797,35 @@ if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
 
 # --- [7/9] GitHub CLI ---
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Write-Host "[7/9] Installing GitHub CLI..." -ForegroundColor Green
-    Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements }
-    Update-SessionPath
+    if (-not $hasWinget -and $env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
+        # CI smoke test on a winget-less runner - documented soft skip.
+        Write-Host "[7/9] GitHub CLI: ELNORA_SKIP_OPTIONAL_INSTALLS=1 and winget unavailable - skipping." -ForegroundColor Gray
+    } else {
+        Write-Host "[7/9] Installing GitHub CLI..." -ForegroundColor Green
+        Invoke-Step "GitHub CLI" { winget install --id GitHub.cli --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
+        Update-SessionPath
 
-    # gh is a standalone Go binary - safe to copy to WindowsApps as a PATH
-    # fallback if the User/Machine PATH update didn't stick (GP, or new session
-    # env not refreshed in time).
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        $ghCandidates = @(
-            "$env:ProgramFiles\GitHub CLI\gh.exe",
-            "${env:ProgramFiles(x86)}\GitHub CLI\gh.exe",
-            "$env:LOCALAPPDATA\Programs\GitHub CLI\gh.exe"
-        )
-        $ghExe = $ghCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-        if ($ghExe) {
-            Write-Host "  [!] gh installed to $ghExe but not on PATH - applying WindowsApps fallback." -ForegroundColor Yellow
-            if (-not (Copy-StandaloneExeToWindowsApps -ExePath $ghExe -ToolName "gh")) {
-                [void]$FailedSteps.Add("GitHub CLI PATH")
+        # gh is a standalone Go binary - safe to copy to WindowsApps as a PATH
+        # fallback if the User/Machine PATH update didn't stick (GP, or new session
+        # env not refreshed in time).
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            $ghCandidates = @(
+                "$env:ProgramFiles\GitHub CLI\gh.exe",
+                "${env:ProgramFiles(x86)}\GitHub CLI\gh.exe",
+                "$env:LOCALAPPDATA\Programs\GitHub CLI\gh.exe"
+            )
+            $ghExe = $ghCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($ghExe) {
+                Write-Host "  [!] gh installed to $ghExe but not on PATH - applying WindowsApps fallback." -ForegroundColor Yellow
+                if (-not (Copy-StandaloneExeToWindowsApps -ExePath $ghExe -ToolName "gh")) {
+                    [void]$FailedSteps.Add("GitHub CLI PATH")
+                }
+            } else {
+                Write-Host "  [!] gh reported installed by winget but not found in the usual locations." -ForegroundColor Red
+                Write-Host "      Check with: winget list --id GitHub.cli --exact" -ForegroundColor Red
+                Write-Host "      Or reinstall: winget install --id GitHub.cli" -ForegroundColor Red
+                [void]$FailedSteps.Add("GitHub CLI (binary not found after install)")
             }
-        } else {
-            Write-Host "  [!] gh reported installed by winget but not found in the usual locations." -ForegroundColor Red
-            Write-Host "      Check with: winget list --id GitHub.cli --exact" -ForegroundColor Red
-            Write-Host "      Or reinstall: winget install --id GitHub.cli" -ForegroundColor Red
-            [void]$FailedSteps.Add("GitHub CLI (binary not found after install)")
         }
     }
 } else {
@@ -797,7 +854,7 @@ if ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1") {
     Write-Host "[8/9] Obsidian: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run." -ForegroundColor Gray
 } elseif (-not $obsidianInstalled) {
     Write-Host "[8/9] Installing Obsidian (optional)..." -ForegroundColor Green
-    Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements }
+    Invoke-Step "Obsidian" { winget install Obsidian.Obsidian --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
     Update-SessionPath
 } else {
     Write-Host "[8/9] Obsidian already installed. Skipping." -ForegroundColor Gray
@@ -936,10 +993,26 @@ function Write-Status {
 
 # Compute every tool's version up-front so the summary AND the headline use the
 # same data. Storing in an ordered dict keeps output order stable.
+#
+# When ELNORA_SKIP_OPTIONAL_INSTALLS=1 AND winget is missing (windows-2022 CI
+# runners), the install loop above deliberately skipped Node.js / Git /
+# Python / GitHub CLI without recording a FAILURE. Reflect that in the
+# summary as "skipped (optional, env flag)" instead of red NOT INSTALLED so
+# the recap headline ("All N installed") stays accurate.
+$ciSkipMissingWinget = ($env:ELNORA_SKIP_OPTIONAL_INSTALLS -eq "1" -and -not $hasWinget)
+
 $results = [ordered]@{}
-$results["Node.js"]     = Get-ToolVersion 'node'
-$results["Git"]         = Get-ToolVersion 'git'
-$results["Python"]      = Get-ToolVersion 'python'
+$nodeVer = Get-ToolVersion 'node'
+if (-not $nodeVer -and $ciSkipMissingWinget) { $nodeVer = "__SKIPPED_OPTIONAL" }
+$results["Node.js"]     = $nodeVer
+
+$gitVer = Get-ToolVersion 'git'
+if (-not $gitVer -and $ciSkipMissingWinget) { $gitVer = "__SKIPPED_OPTIONAL" }
+$results["Git"]         = $gitVer
+
+$pythonVer = Get-ToolVersion 'python'
+if (-not $pythonVer -and $ciSkipMissingWinget) { $pythonVer = "__SKIPPED_OPTIONAL" }
+$results["Python"]      = $pythonVer
 
 $vscodeExe = @(
     "$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
@@ -959,7 +1032,10 @@ if ($vscodeExe) {
 
 $results["Claude Code"] = Get-ToolVersion 'claude'
 $results["Elnora CLI"]  = Get-ToolVersion 'elnora'
-$results["GitHub CLI"]  = Get-ToolVersion 'gh'
+
+$ghVer = Get-ToolVersion 'gh'
+if (-not $ghVer -and $ciSkipMissingWinget) { $ghVer = "__SKIPPED_OPTIONAL" }
+$results["GitHub CLI"]  = $ghVer
 
 $obsidianExe = @(
     "$env:LOCALAPPDATA\Obsidian\Obsidian.exe",
