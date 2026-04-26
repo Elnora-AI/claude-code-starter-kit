@@ -11,6 +11,14 @@ name: install-smoke-test
 #   - No GUI: can't test browser auth, VS Code PATH cache, or Xcode CLT dialog.
 #   - No corporate Group Policy, no antivirus interference.
 #   - Read-Host prompts would hang; we pre-set git config to avoid one.
+#   - The windows-2022 runner does NOT include winget by default, so this
+#     smoke test cannot validate winget-based steps (Node/Git/Python/VS Code/
+#     gh/Obsidian on Windows). Real Win10/11 attendees have winget pre-installed
+#     via App Installer. To test winget paths, use a real Windows VM (Option C).
+#   - Shared CI runner IP pools routinely exhaust the GitHub API's 60/hour
+#     unauthenticated rate limit. setup-mac.sh and setup-windows.ps1 work
+#     around this by pinning the Elnora CLI version, which bypasses the
+#     installer's API-based version resolution.
 #
 # Trigger: workflow_dispatch (manual) + push to main when an install script
 # changes. Not on PRs to keep it lightweight; trigger manually via
@@ -60,6 +68,18 @@ jobs:
           echo "=== ~/claude-starter-install.log ==="
           cat "$HOME/claude-starter-install.log" || echo "(log not produced)"
 
+      - name: Fail if any in-script step reported FAILURE
+        if: always()
+        run: |
+          # The setup script always exits 0 (so IDE terminals don't hide the
+          # remediation recap). To make this workflow a meaningful CI gate,
+          # grep the install log for the FAILURE: marker the script emits in
+          # its per-step failure box and fail the job if any are present.
+          if [ -f "$HOME/claude-starter-install.log" ] && grep -q "FAILURE:" "$HOME/claude-starter-install.log"; then
+            echo "::error::setup-mac.sh reported one or more in-step FAILURE markers (see install log above)"
+            exit 1
+          fi
+
   windows:
     name: Windows (setup-windows.ps1)
     runs-on: windows-2022
@@ -87,3 +107,17 @@ jobs:
         run: |
           Write-Host "=== claude-starter-install.log ==="
           Get-Content "$env:USERPROFILE\claude-starter-install.log" -ErrorAction SilentlyContinue
+
+      - name: Fail if any in-script step reported FAILURE
+        if: always()
+        shell: pwsh
+        run: |
+          # See matching comment in the macOS job above.
+          $logPath = "$env:USERPROFILE\claude-starter-install.log"
+          if (Test-Path $logPath) {
+            $log = Get-Content $logPath -Raw
+            if ($log -match "FAILURE:") {
+              Write-Host "::error::setup-windows.ps1 reported one or more in-step FAILURE markers (see install log above)"
+              exit 1
+            }
+          }

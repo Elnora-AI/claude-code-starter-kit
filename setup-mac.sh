@@ -293,10 +293,17 @@ fi
 # "AI surfaces first, toolchain second" and so the Elnora binary is ready
 # the moment a user opens Claude Code.
 if ! command -v elnora &> /dev/null; then
-    echo "[2/10] Installing Elnora CLI..."
+    # Pin the Elnora CLI version to bypass the installer's GitHub API call for
+    # release-resolution. Without a pin, the installer hits
+    # api.github.com/repos/.../releases/latest which is rate-limited to 60/hour
+    # per IP — fine for a home user, but corporate-NAT pharma networks can
+    # exhaust quota across many users, and shared CI runner IP pools hit it
+    # routinely. Bump this when a newer release should be the workshop default.
+    ELNORA_CLI_VERSION="v1.5.0"
+    echo "[2/10] Installing Elnora CLI ($ELNORA_CLI_VERSION)..."
     echo "  Using Elnora's native installer (no prerequisites required)."
     # pipefail — see matching comment in the Claude Code block above.
-    if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash"; then
+    if run_step "Elnora CLI" /bin/bash -c "set -o pipefail; curl -fsSL https://cli.elnora.ai/install.sh | bash -s $ELNORA_CLI_VERSION"; then
         # Claude Code's step already exported PATH above, but be explicit in case
         # this script is ever re-ordered.
         export PATH="$HOME/.local/bin:$PATH"
