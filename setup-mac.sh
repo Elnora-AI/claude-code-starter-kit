@@ -956,7 +956,7 @@ EOF
         else
             echo "      [WARN] 'elnora setup claude' returned non-zero. Output:"
             printf '%s\n' "$setup_out" | sed 's/^/             /'
-            echo "             Non-fatal — the plugin still works for THIS"
+            echo "             Non-fatal - the plugin still works for THIS"
             echo "             project via .claude/settings.json in this repo."
         fi
     else
