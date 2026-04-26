@@ -43,13 +43,11 @@ echo ""
 echo "[elnora auth]"
 if [ -f "$HOME/.elnora/profiles.toml" ]; then
     ok "~/.elnora/profiles.toml exists"
-    mode=$(stat -f '%Lp' "$HOME/.elnora/profiles.toml" 2>/dev/null || stat -c '%a' "$HOME/.elnora/profiles.toml" 2>/dev/null || echo "?")
-    if [ "$mode" = "600" ]; then
-        ok "profiles.toml mode is 600"
-    else
-        # The CLI writes 600 itself; warn but don't fail in case of umask quirks.
-        echo "  ⚠ profiles.toml mode is $mode (expected 600 — CLI usually sets this)"
-    fi
+    # Note: the CLI sets mode 600 itself; we don't re-check it here. The
+    # customer-visible contract for the starter kit is "key persisted +
+    # auth status returns success" (covered below) — re-validating the
+    # CLI's own file-mode behavior isn't this test's responsibility, and
+    # there's no equivalent ACL check on Windows anyway.
     # Allow leading whitespace — TOML lets `api_key = ...` appear indented
     # inside a [profile] table section, and the CLI is free to format that way.
     if grep -qE '^[[:space:]]*api_key[[:space:]]*=[[:space:]]*"elnora_live_' "$HOME/.elnora/profiles.toml"; then
@@ -104,8 +102,8 @@ if [ -d .git ]; then
         else
             fail "local HEAD ($local_head) != origin/main ($remote_head)"
         fi
-        # `gh repo view` needs auth. The agent ran `gh auth login --with-token`
-        # earlier, so gh's config already has the token persisted on this runner.
+        # `gh repo view` needs auth. The agent exported GH_TOKEN earlier,
+        # so gh inherits the token from the environment on this runner.
         if visibility=$(gh repo view "$ELNORA_HANDOFF_REPO_NAME" --json visibility --jq .visibility 2>/dev/null) && [ "$visibility" = "PRIVATE" ]; then
             ok "GitHub repo $ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE"
         else
@@ -124,19 +122,25 @@ else
 fi
 
 # --- Knowledge base config ---
+# The doc tells the agent to ALWAYS write `.claude/knowledge-base.local.md`,
+# even when no vault was found — leaving `vault_path:` as the
+# `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder. So the file's existence is
+# always required; the placeholder-replaced check only fires when the test
+# fixture actually staged a vault (signalled by KB_STAGED=1).
 echo ""
 echo "[knowledge base]"
 if [ -f .claude/knowledge-base.local.md ]; then
     ok ".claude/knowledge-base.local.md exists"
-    # Should NOT contain the placeholder.
-    if grep -q '<ABSOLUTE_PATH_TO_YOUR_VAULT>' .claude/knowledge-base.local.md; then
-        fail "knowledge-base.local.md still contains <ABSOLUTE_PATH_TO_YOUR_VAULT> placeholder"
+    if [ "${KB_STAGED:-}" = "1" ]; then
+        if grep -q '<ABSOLUTE_PATH_TO_YOUR_VAULT>' .claude/knowledge-base.local.md; then
+            fail "knowledge-base.local.md still contains <ABSOLUTE_PATH_TO_YOUR_VAULT> placeholder (vault was staged; agent should have replaced it)"
+        else
+            ok "knowledge-base.local.md placeholder was replaced"
+        fi
     else
-        ok "knowledge-base.local.md placeholder was replaced"
+        echo "  - placeholder-replacement check skipped (KB_STAGED unset; no vault was staged for this run)"
     fi
 else
-    # Skipped is acceptable in headless mode if the test fixture didn't
-    # stage a vault — but we DO stage one, so this should exist.
     fail ".claude/knowledge-base.local.md was not created"
 fi
 

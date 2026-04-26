@@ -206,6 +206,12 @@ jobs:
           # a subprocess whose persisted hosts.yml may not be visible
           # here) and the visibility check returns <unreachable>.
           GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+          # The "Stage fake Obsidian vault" step above DID stage a vault, so
+          # the agent is expected to replace the placeholder in
+          # knowledge-base.local.md. Setting this flag tells assert.sh to
+          # enforce the replacement; without it the check soft-skips
+          # (intended for a future no-vault variant of the test).
+          KB_STAGED: "1"
         run: |
           chmod +x tests/handoff/assert.sh
           # assert.sh runs from the workspace (where tests/ lives), pointed
@@ -394,6 +400,9 @@ jobs:
           # See matching comment in macOS job — give assert.ps1's
           # `gh repo view` a token to read the test repo's visibility.
           GH_TOKEN: ${{ secrets.PAT_TOKEN_TEST }}
+          # The "Stage fake Obsidian vault" step above DID stage a vault;
+          # tell assert.ps1 to enforce the placeholder-replacement check.
+          KB_STAGED: "1"
         run: |
           # assert.ps1 runs from the workspace (where tests/ lives), pointed
           # at the staged kit (where setup-windows.ps1 ran and CLAUDE.md/.git

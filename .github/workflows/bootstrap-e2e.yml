@@ -142,6 +142,10 @@ jobs:
 
       - name: Run post-state assertions
         if: always()
+        env:
+          # The vault-staging step above DID stage a vault, so tell
+          # assert.sh to enforce the placeholder-replacement check.
+          KB_STAGED: "1"
         run: |
           # Assertions run against the install target dir (where install.sh
           # placed the kit), NOT the checkout. The checkout is just the
@@ -248,6 +252,10 @@ jobs:
       - name: Run post-state assertions
         if: always()
         shell: pwsh
+        env:
+          # The vault-staging step above DID stage a vault, so tell
+          # assert.ps1 to enforce the placeholder-replacement check.
+          KB_STAGED: "1"
         run: |
           $target = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
           & "$env:GITHUB_WORKSPACE\tests\handoff\assert.ps1" -RepoDir $target -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT
