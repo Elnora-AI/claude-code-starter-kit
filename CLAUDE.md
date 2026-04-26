@@ -158,8 +158,11 @@ When triggered, Claude MUST on the first knowledge-base-related request:
    b. `ls` (or `Glob`) the `vault_path` and confirm the directory actually
       exists and is readable. Print a couple of filenames from inside it to
       the user so they can confirm it looks right.
-   c. If `company_dir` was set, confirm that sub-directory also exists
-      inside the vault.
+   c. If `company_dir` was set to a real value (not the
+      `<YOUR_WORKSPACE_SUBDIR>` placeholder, not empty, not commented out),
+      confirm that sub-directory also exists inside the vault. Treat the
+      placeholder as unset — if you see it, delete the line entirely
+      rather than treating it as a real path.
 
    If any check fails, STOP. Do NOT proceed to step 5. Tell the user exactly
    which check failed and what you found (e.g., "vault_path is set to

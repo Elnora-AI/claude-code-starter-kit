@@ -153,18 +153,29 @@ You can add them via `/plugins` > "Add marketplace" when you're ready.
 
 ---
 
-## Recommended first installs
+## What's enabled out of the box
 
-For most people, start with these two:
+The kit ships with four plugins already turned on in `.claude/settings.json`:
+
+- **elnora** (from `elnora-plugins`) — bioprotocol generation, task/file/project management
+- **commit-commands** (from `claude-code-plugins`) — `/commit`, `/commit-push-pr`
+- **context7** (from `claude-plugins-official`) — current library docs via MCP
+- **claude-md-management** (from `claude-plugins-official`) — keeps `CLAUDE.md` tidy
+
+Open `/plugins` to see them listed as installed. You don't need to install
+these — they're ready immediately.
+
+## Recommended next installs
+
+The most common addition for most people:
 
 1. **document-skills** (from `anthropic-agent-skills`) — lets Claude work with PDFs, Word, Excel, PowerPoint
-2. **commit-commands** (from `claude-code-plugins`) — makes Git commits easier with `/commit`
 
 Then explore based on your role:
 
 | Your role | Also consider |
 |-----------|---------------|
-| **Operations / Project Management** | commit-commands, code-review |
+| **Operations / Project Management** | code-review |
 | **Research / Science** | document-skills covers most needs |
 | **Business / Strategy** | document-skills, frontend-design |
 | **Engineering / Development** | feature-dev, pr-review-toolkit, code-review |

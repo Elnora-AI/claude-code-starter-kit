@@ -72,7 +72,12 @@ def main() -> int:
     for f in FILES:
         p = pathlib.Path(f)
         if not p.exists():
-            print(f"::warning file={f}::missing - skipped")
+            # Hard fail: if a tracked setup script is renamed or deleted
+            # without updating FILES, silent skipping would let non-ASCII
+            # slip into the renamed file and break PowerShell parsing on
+            # Win10/11. Force the rename to update both places.
+            print(f"::error file={f}::expected file is missing - update FILES list")
+            bad += 1
             continue
         text = p.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.split("\n"), 1):
@@ -88,11 +93,13 @@ def main() -> int:
 
     if bad:
         print()
-        print(f"Found {bad} line(s) with non-ASCII chars outside # comments.")
+        print(f"Found {bad} problem(s) above (missing files and/or non-ASCII chars outside # comments).")
         print("Windows PowerShell 5.1 reads .ps1 files as Windows-1252 unless they")
         print("have a UTF-8 BOM, so non-ASCII bytes inside string literals get")
         print("mojibaked mid-string and break parsing. Replace with ASCII (e.g.")
         print("em-dash to '-', smart quotes to straight, box-drawings to '+|-').")
+        print("If a file is reported missing, update the FILES list in this script")
+        print("to match the rename.")
         return 1
 
     print(f"OK: all {len(FILES)} setup/install scripts are ASCII outside # comments.")

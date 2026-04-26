@@ -31,7 +31,7 @@ These marketplaces are configured in `.claude/settings.json`. Browse them with `
 | **claude-plugins-official** | [anthropics/claude-plugins-official](https://github.com/anthropics/claude-plugins-official) | More official plugins |
 | **anthropic-agent-skills** | [anthropics/skills](https://github.com/anthropics/skills) | Document processing skills |
 | **knowledge-work-plugins** | [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) | Knowledge-work plugins (sales, finance, legal, HR, marketing, product, support, data, design, bio-research, etc.) — registered, no plugins enabled by default |
-| **elnora-plugins** | [Elnora-AI/elnora-plugins](https://github.com/Elnora-AI/elnora-plugins) | The `elnora` plugin — bioprotocol generation, task/file/project management for wet-lab work. Registered with `autoUpdate: true`, no plugins enabled by default |
+| **elnora-plugins** | [Elnora-AI/elnora-plugins](https://github.com/Elnora-AI/elnora-plugins) | The `elnora` plugin — bioprotocol generation, task/file/project management for wet-lab work. **Enabled by default** (`elnora@elnora-plugins`) so first-run users have it ready without browsing `/plugins`. |
 
 ---
 
