@@ -37,8 +37,13 @@ mode, follow these adjustments:
   **then edit `CLAUDE.md` to delete the entire `### First-run setup`
   subsection** using the anchor-pair strip described below. The self-clean
   is REQUIRED — it's step 5 of CLAUDE.md's First-run setup, and skipping
-  it leaves scaffolding in the production CLAUDE.md forever. If you don't
-  find a vault, skip the whole step.
+  it leaves scaffolding in the production CLAUDE.md forever. If you
+  don't find a vault, **still create
+  `.claude/knowledge-base.local.md`** by copying the template
+  verbatim — leave `vault_path:` as the literal placeholder
+  `<ABSOLUTE_PATH_TO_YOUR_VAULT>`. Don't skip writing the file: the
+  post-handoff assertion checks for its existence and detects the
+  placeholder string to soft-skip the path-replacement check.
   - **Sensitive-paths shortcut.** When writing
     `.claude/knowledge-base.local.md`, the `Write` and `Edit` tools (and
     `Bash` heredoc constructions like `cat > ... << 'EOF'`) are blocked
@@ -84,22 +89,33 @@ mode, follow these adjustments:
     After the strip, verify with `grep -c '### First-run setup' CLAUDE.md`
     (must print `0`) and `grep -c '### Reading the config' CLAUDE.md`
     (must print `1`).
+  - **Commit shape — fold into the initial commit, don't add a second.**
+    When you commit the CLAUDE.md self-clean and
+    `.claude/knowledge-base.local.md`, fold both changes into the initial
+    commit (use `git add` followed by `git commit --amend --no-edit`).
+    Don't create a second "cleanup" commit — the initial state should be
+    one clean commit. If step 6 already created the initial commit before
+    step 8 ran, amend it after the strip + write; if step 8 ran first,
+    just include the changes when step 6 stages and commits.
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
     handoff-e2e workflow), do step 6 in full but with these adjustments:
-    - **6b (auth):** instead of opening a browser, pipe the token into
-      `gh auth login --with-token`:
+    - **6b (auth):** instead of opening a browser, authenticate `gh` by
+      exporting the token as an environment variable:
 
       ```
-      printf '%s' "$ELNORA_HANDOFF_GH_TOKEN" | gh auth login --with-token --hostname github.com
-      gh auth setup-git
+      export GH_TOKEN="$ELNORA_HANDOFF_GH_TOKEN"
       ```
 
-      Then run the 6b verification gates as written. (`printf` avoids
-      the trailing newline that `echo` adds, which `gh` rejects.)
-      After `gh auth setup-git`, git uses gh's credential helper for
-      pushes — do **not** embed the token in the remote URL
+      Don't run `gh auth login --with-token` — the test PAT may lack the
+      `read:org` scope that command validates, even though the token is
+      fully functional for repo creation. With `GH_TOKEN` exported, every
+      subsequent `gh` and `git` push call inherits the token via gh's
+      built-in credential helper.
+
+      Then run the 6b verification gates as written. Do **not** embed
+      the token in the remote URL
       (`https://x-access-token:$TOKEN@github.com/...`) and do **not**
       add `--no-thin` or other workaround flags to `git push`. If a
       push fails, surface the actual error rather than papering over it.

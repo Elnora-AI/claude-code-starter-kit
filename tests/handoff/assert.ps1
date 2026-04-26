@@ -135,8 +135,8 @@ if (Test-Path .git) {
         } else {
             Assert-Fail "local HEAD ($localHead) != origin/main ($remoteHead)"
         }
-        # `gh repo view` needs auth. The agent ran `gh auth login --with-token`
-        # earlier, so gh's config already has the token persisted on this runner.
+        # `gh repo view` needs auth. The agent exported GH_TOKEN earlier,
+        # so gh inherits the token from the environment on this runner.
         $visibility = gh repo view $env:ELNORA_HANDOFF_REPO_NAME --json visibility --jq .visibility 2>$null
         if ($visibility -eq "PRIVATE") {
             Assert-Ok "GitHub repo $env:ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE"
@@ -158,16 +158,25 @@ if (Test-Path .git) {
 }
 
 # --- Knowledge base config ---
+# The doc tells the agent to ALWAYS write `.claude/knowledge-base.local.md`,
+# even when no vault was found — leaving `vault_path:` as the
+# `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder. So the file's existence is
+# always required; the placeholder-replaced check only fires when the test
+# fixture actually staged a vault (signalled by KB_STAGED=1).
 Write-Host ""
 Write-Host "[knowledge base]"
 $kbPath = ".claude/knowledge-base.local.md"
 if (Test-Path $kbPath) {
     Assert-Ok "$kbPath exists"
     $kbContent = Get-Content $kbPath -Raw
-    if ($kbContent -match '<ABSOLUTE_PATH_TO_YOUR_VAULT>') {
-        Assert-Fail "$kbPath still contains <ABSOLUTE_PATH_TO_YOUR_VAULT> placeholder"
+    if ($env:KB_STAGED -eq "1") {
+        if ($kbContent -match '<ABSOLUTE_PATH_TO_YOUR_VAULT>') {
+            Assert-Fail "$kbPath still contains <ABSOLUTE_PATH_TO_YOUR_VAULT> placeholder (vault was staged; agent should have replaced it)"
+        } else {
+            Assert-Ok "$kbPath placeholder was replaced"
+        }
     } else {
-        Assert-Ok "$kbPath placeholder was replaced"
+        Write-Host "  -  placeholder-replacement check skipped (KB_STAGED unset; no vault was staged for this run)"
     }
 } else {
     Assert-Fail "$kbPath was not created"
