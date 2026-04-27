@@ -15,10 +15,6 @@
     "grep": {
       "type": "http",
       "url": "https://mcp.grep.app"
-    },
-    "elnora": {
-      "type": "http",
-      "url": "https://mcp.elnora.ai/mcp"
     }
   }
 }
