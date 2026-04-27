@@ -277,6 +277,14 @@ jobs:
           # enforce the replacement; without it the check soft-skips
           # (intended for a future no-vault variant of the test).
           KB_STAGED: "1"
+          # Step 11 cleanup deletes INSTALL_FOR_AGENTS.md from the staged
+          # kit, but the hardening regression check still needs to read
+          # the doc to scan for re-introduced sensitive-paths bypasses.
+          # Point assert.sh at the original workspace checkout (untouched
+          # by Phase 2) so the regression check has a stable source.
+          # github.workspace is a runner-set context value (the path to
+          # the checkout), not user-controlled input — safe to interpolate.
+          ELNORA_KIT_SOURCE_DIR: ${{ github.workspace }}
         run: |
           chmod +x tests/handoff/assert.sh
           # assert.sh runs from the workspace (where tests/ lives), pointed
@@ -535,6 +543,12 @@ jobs:
           # The "Stage fake Obsidian vault" step above DID stage a vault;
           # tell assert.ps1 to enforce the placeholder-replacement check.
           KB_STAGED: "1"
+          # Step 11 cleanup deletes INSTALL_FOR_AGENTS.md from the staged
+          # kit. Point assert.ps1 at the original workspace checkout
+          # (untouched by Phase 2) so the hardening regression check has
+          # a stable source. github.workspace is a runner-set context
+          # value (the path to the checkout), not user-controlled input.
+          ELNORA_KIT_SOURCE_DIR: ${{ github.workspace }}
         run: |
           # assert.ps1 runs from the workspace (where tests/ lives), pointed
           # at the staged kit (where setup-windows.ps1 ran and CLAUDE.md/.git
