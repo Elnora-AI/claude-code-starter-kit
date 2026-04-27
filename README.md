@@ -204,6 +204,23 @@ Pre-installed and configured by the setup script:
 - [`elnora-plugins`](https://github.com/Elnora-AI/elnora-plugins) — plugin marketplace
 - Elnora MCP server — configured in `.mcp.json` (`https://mcp.elnora.ai/mcp`)
 
+## Need custom integrations?
+
+This kit gives you the foundation: Claude Code wired up to Elnora, ready to
+generate protocols and run day-to-day lab workflows. It does **not** ship
+with integrations to your specific lab instruments, LIMS, ELN, or internal
+systems out of the box.
+
+We're forward-deployed engineers who specialize in building those
+integrations for biotech, pharma, and techbio teams. If you want Elnora
+connected to the tools you actually use in the lab (instrument data, sample
+tracking, inventory, internal databases, or anything else you can imagine),
+we'll help you scope it, build it on top of this repo, and get your first
+agents running in production.
+
+Email [carmen.kivisild@elnora.ai](mailto:carmen.kivisild@elnora.ai) to start
+a conversation.
+
 ## License
 
 MIT.
