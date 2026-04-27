@@ -25,58 +25,59 @@ echo "  1. Download the starter kit to ~/Documents/elnora-starter-kit"
 echo "  2. Run setup-mac.sh (installs Claude Code + dev tools)"
 echo ""
 
-FRESH_EXTRACT=0
-
+# Always wipe + re-extract on every run. If the customer is running this
+# script again it's because something didn't work the first time -- they
+# want a fresh starting point, not a half-stale copy of last week's repo.
+# System tools (Claude, Node, Python, brew, Obsidian) are NOT touched here:
+# setup-mac.sh detects existing installs and updates in place, so re-running
+# won't blow away a working toolchain.
 if [ -d "$TARGET_DIR" ]; then
-    echo "Starter kit already exists at $TARGET_DIR"
-    echo "Re-running setup from existing copy. Remove the folder to re-download."
-else
-    echo "Downloading starter kit tarball..."
-    TARBALL_URL="https://github.com/$REPO_OWNER/$REPO_NAME/archive/refs/heads/$BRANCH.tar.gz"
-    TMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TMP_DIR"' EXIT
+    echo "Existing starter kit detected at $TARGET_DIR"
+    echo "Wiping for a fresh install (system tools like Claude, Node, Python are kept)..."
+    rm -rf "$TARGET_DIR"
+fi
 
-    if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
-        mkdir -p "$(dirname "$TARGET_DIR")"
-        # GitHub's tarball extracts to "<repo>-<branch>". Verify that path
-        # exists before moving -- protects against branch names that contain
-        # slashes (GitHub rewrites '/' to '-' inside the archive but $BRANCH
-        # would still carry the slash) and against silent tar failures
-        # mid-pipe that don't trip curl's exit code. install.ps1 already
-        # has the equivalent check; parity matters.
-        EXTRACTED="$TMP_DIR/$REPO_NAME-$BRANCH"
-        if [ ! -d "$EXTRACTED" ]; then
-            echo "[!] Expected extracted folder not found: $EXTRACTED" >&2
-            echo "    The tarball may have changed shape, or tar failed silently." >&2
-            exit 1
-        fi
-        mv "$EXTRACTED" "$TARGET_DIR"
-        echo "Extracted to $TARGET_DIR"
-        FRESH_EXTRACT=1
-    else
-        echo "[!] Failed to download starter kit from $TARBALL_URL" >&2
-        echo "    Check your internet connection and retry:" >&2
-        echo "      curl -fsSL https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH/install.sh | bash" >&2
+echo "Downloading starter kit tarball..."
+TARBALL_URL="https://github.com/$REPO_OWNER/$REPO_NAME/archive/refs/heads/$BRANCH.tar.gz"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
+    mkdir -p "$(dirname "$TARGET_DIR")"
+    # GitHub's tarball extracts to "<repo>-<branch>". Verify that path
+    # exists before moving -- protects against branch names that contain
+    # slashes (GitHub rewrites '/' to '-' inside the archive but $BRANCH
+    # would still carry the slash) and against silent tar failures
+    # mid-pipe that don't trip curl's exit code. install.ps1 already
+    # has the equivalent check; parity matters.
+    EXTRACTED="$TMP_DIR/$REPO_NAME-$BRANCH"
+    if [ ! -d "$EXTRACTED" ]; then
+        echo "[!] Expected extracted folder not found: $EXTRACTED" >&2
+        echo "    The tarball may have changed shape, or tar failed silently." >&2
         exit 1
     fi
+    mv "$EXTRACTED" "$TARGET_DIR"
+    echo "Extracted to $TARGET_DIR"
+else
+    echo "[!] Failed to download starter kit from $TARBALL_URL" >&2
+    echo "    Check your internet connection and retry:" >&2
+    echo "      curl -fsSL https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH/install.sh | bash" >&2
+    exit 1
 fi
 
 cd "$TARGET_DIR"
 
-# On fresh extract, write a marker file recording the SHA256 of
-# INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-mac.sh
-# verifies this hash before handing off to claude with bypassPermissions --
-# if a third party tampers with the doc between extract and setup, the
-# verify step trips and the handoff aborts. This is the trust anchor for
-# the headless Phase 2 flow.
+# Write a marker file recording the SHA256 of INSTALL_FOR_AGENTS.md as it was
+# extracted from GitHub. setup-mac.sh verifies this hash before handing off to
+# claude with bypassPermissions -- if a third party tampers with the doc
+# between extract and setup, the verify step trips and the handoff aborts.
+# This is the trust anchor for the headless Phase 2 flow.
 #
-# We only write on FRESH extract. If we wrote on every run, a tampered
-# doc would just get re-blessed on the next install.sh invocation, which
-# defeats the point. setup-mac.sh handles the legacy "no marker" case
-# (pre-existing installs from before integrity markers shipped) with a
-# soft warning for the interactive handoff and a hard refusal for headless
-# bypassPermissions runs.
-if [ "$FRESH_EXTRACT" = "1" ] && [ -f "$TARGET_DIR/INSTALL_FOR_AGENTS.md" ]; then
+# Every install.sh run is a fresh extract from the official tarball (we
+# always wipe + re-download above), so re-blessing here is correct: the doc
+# is always exactly what GitHub just served, and the marker stays in lockstep
+# with whatever INSTALL_FOR_AGENTS.md content the customer is about to run.
+if [ -f "$TARGET_DIR/INSTALL_FOR_AGENTS.md" ]; then
     install_for_agents_sha=$(shasum -a 256 "$TARGET_DIR/INSTALL_FOR_AGENTS.md" | awk '{print $1}')
     cat > "$TARGET_DIR/.elnora-starter-kit-marker" <<EOF
 version: 1

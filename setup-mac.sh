@@ -300,8 +300,10 @@ if ! command -v claude &> /dev/null; then
     # through the pipe so run_step can catch and remediate it.
     if run_step "Claude Code" /bin/bash -c "set -o pipefail; curl -fsSL https://claude.ai/install.sh | bash"; then
         # Make `claude` visible in THIS shell without requiring a new terminal.
-        # The installer persists this to the user's shell profile for future
-        # sessions, but we also export it here so the rest of this run sees it.
+        # We also call persist_local_bin_path below to ensure future shells
+        # (new Terminal windows, VS Code's integrated terminal) inherit the
+        # PATH entry -- the Anthropic installer's own shell-profile update is
+        # unreliable on re-runs (see persist_local_bin_path comment).
         export PATH="$HOME/.local/bin:$PATH"
         echo "  Done. Version: $(claude --version 2>/dev/null || echo 'installed - restart terminal')"
     fi
@@ -380,6 +382,40 @@ for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew; do
         break
     fi
 done
+
+# Helper: append `export PATH="$HOME/.local/bin:$PATH"` to the user's zsh
+# login profile so new terminals pick up Claude/Elnora automatically.
+#
+# Why this exists: Anthropic's native installer (claude.ai/install.sh) is
+# inconsistent about persisting PATH on re-runs. When the binary already
+# exists at ~/.local/bin/claude (e.g. customer is re-running setup after
+# a partial install), the installer prints a "Native installation exists
+# but ~/.local/bin is not in your PATH" notice and expects the user to
+# manually run the echo command -- it does NOT update ~/.zshrc itself in
+# that path. Customers ended up with claude installed but unreachable
+# from VS Code's terminal. Mirrors persist_brew_path's belt-and-suspenders
+# approach. Idempotent: skips writing if the line is already in the file.
+persist_local_bin_path() {
+    local shell_profile="$HOME/.zprofile"
+    [ "$(basename "${SHELL:-}")" = "bash" ] && shell_profile="$HOME/.bash_profile"
+    # shellcheck disable=SC2016  # literal $HOME -- zsh expands at shell start, not now
+    local export_line='export PATH="$HOME/.local/bin:$PATH"'
+    if ! grep -Fq "$export_line" "$shell_profile" 2>/dev/null; then
+        {
+            echo ""
+            echo "# Added by Elnora Starter Kit setup-mac.sh"
+            echo "$export_line"
+        } >> "$shell_profile"
+        echo "  Persisted ~/.local/bin to PATH in $shell_profile (open a fresh terminal to inherit it)."
+    fi
+}
+
+# Run the helper once now that both Claude and Elnora install steps above
+# are done. Idempotent if the line is already there. Catches both the fresh
+# install case (where Anthropic's installer often skips this step on
+# non-interactive `curl | bash` invocations) and the re-run case (where the
+# installer skips its shell-profile update because the binary already exists).
+persist_local_bin_path
 
 # Helper: append brew shellenv to the user's shell profile so new terminals pick
 # up brew automatically. Homebrew's own installer does NOT do this reliably -
