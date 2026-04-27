@@ -25,7 +25,7 @@ $ErrorActionPreference = "Continue"
 # AND native command output (winget, git, etc.) in PS 5.1+. Overwrites on each
 # run - re-runs are idempotent, so keeping old logs around isn't useful.
 #
-# We rely on the default %USERPROFILE% ACLs for confidentiality — files
+# We rely on the default %USERPROFILE% ACLs for confidentiality -- files
 # created under the user's profile dir inherit "owner + SYSTEM read/write
 # only" by default, so other local users on the machine cannot read this
 # log. The Elnora API key is captured via Read-Host -AsSecureString below
@@ -708,11 +708,11 @@ if (-not $nodeMajorOk) {
         } else {
             Write-Host "[3/9] Installing Node.js 22 LTS..." -ForegroundColor Green
         }
-        # Pin to Node 22.x — the `OpenJS.NodeJS.LTS` alias rolls forward
+        # Pin to Node 22.x -- the `OpenJS.NodeJS.LTS` alias rolls forward
         # and currently only has Node 24 manifests in the winget catalog,
         # which left mac (`brew install node@22`) and Windows on different
         # majors after the same installer. Use `OpenJS.NodeJS` (the
-        # major-tracked package) instead — it carries every patchline of
+        # major-tracked package) instead -- it carries every patchline of
         # every major, so we can pin to a specific 22.x.y that matches
         # what `node@22` resolves to on Homebrew.
         #
@@ -964,8 +964,8 @@ $cdtBlock = [pscustomobject]@{
     args    = @("/c", "npx", "chrome-devtools-mcp@latest", "--autoConnect")
 }
 # BOM-less UTF-8 writer. Out-File / Set-Content with -Encoding utf8 on Windows
-# PowerShell 5.1 prepends a UTF-8 BOM (EF BB BF), and Node's JSON.parse — which
-# is what Claude Code's MCP host uses — rejects BOM-prefixed JSON. PS 7 already
+# PowerShell 5.1 prepends a UTF-8 BOM (EF BB BF), and Node's JSON.parse -- which
+# is what Claude Code's MCP host uses -- rejects BOM-prefixed JSON. PS 7 already
 # defaults to BOM-less, so this stays correct on both.
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 try {
@@ -1001,8 +1001,11 @@ Write-Host ""
 Update-SessionPath
 
 # Force UTF-8 output so the unicode check / cross marks render. PS 5.1 defaults
-# to OEM codepage which mangles them - without this, ✓ shows as garbled bytes
-# in the very summary row that's supposed to scream "all good".
+# to OEM codepage which mangles them - without this, the check-mark glyph
+# shows as garbled bytes in the very summary row that's supposed to scream
+# "all good". Note: we keep the glyphs out of this source file (see [char]
+# escapes below) and only emit them at runtime, so the script itself stays
+# pure ASCII and survives PS 5.1's BOM-less ANSI script parsing.
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 function Get-ToolVersion {
@@ -1049,12 +1052,12 @@ function Write-Status {
         Write-Host "skipped (optional, env flag)" -ForegroundColor DarkGray
     } elseif (-not $Version -or $Version -eq "not found") {
         Write-Host "  " -NoNewline
-        Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline   # ✗
+        Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline   # cross mark
         Write-Host " $padded " -NoNewline
         Write-Host "NOT INSTALLED" -ForegroundColor Red
     } else {
         Write-Host "  " -NoNewline
-        Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline  # ✓
+        Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline  # check mark
         Write-Host " $padded " -NoNewline
         Write-Host $Version -ForegroundColor Green
     }
@@ -1435,7 +1438,7 @@ try { Stop-Transcript | Out-Null } catch { }
 # uses. Keeps the on-disk log readable without changing what live users saw.
 #
 # Scoped to ELNORA_SKIP_HANDOFF=1 / headless test mode for the same reason
-# the live filter is — interactive users should still see all output, since
+# the live filter is -- interactive users should still see all output, since
 # any "noise" in their flow may indicate a real problem.
 if (($env:ELNORA_SKIP_HANDOFF -eq "1") -or ($env:ELNORA_HANDOFF_MODE -eq "headless")) {
     if (Test-Path $LogFile) {
@@ -1621,7 +1624,7 @@ if ($claudeAvailable) {
     #   2. `code` CLI on PATH and the user hasn't opted out: write a one-shot
     #      sentinel containing the handoff prompt, open VS Code at this repo,
     #      and exit. VS Code's runOn:folderOpen task picks up the sentinel and
-    #      hands off to claude inside the integrated terminal — so users get
+    #      hands off to claude inside the integrated terminal -- so users get
     #      the file tree, source control panel, and IDE around their session
     #      instead of a bare PowerShell window. ELNORA_SKIP_VSCODE_HANDOFF=1 is
     #      the user-facing escape hatch.
@@ -1643,7 +1646,7 @@ if ($claudeAvailable) {
         $sentinel  = Join-Path $vscodeDir ".handoff-pending"
         $helper    = Join-Path $vscodeDir "run-handoff.ps1"
         if ((Test-Path -LiteralPath $vscodeDir) -and (Test-Path -LiteralPath $helper)) {
-            # The sentinel's content IS the prompt — single source of truth
+            # The sentinel's content IS the prompt -- single source of truth
             # lives in $HandoffPrompt above. The helper reads, deletes, then
             # invokes claude. BOM-less UTF-8 to keep Get-Content -Raw clean.
             [System.IO.File]::WriteAllText($sentinel, $HandoffPrompt, [System.Text.UTF8Encoding]::new($false))
