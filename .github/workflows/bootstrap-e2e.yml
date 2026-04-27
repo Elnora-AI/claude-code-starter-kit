@@ -137,9 +137,10 @@ jobs:
           import re, sys, pathlib
           p = pathlib.Path(sys.argv[1])
           s = p.read_text()
-          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***',     s)
-          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***', s)
-          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***',         s)
+          s = re.sub(r'sk-ant-[A-Za-z0-9_\-]+',       'sk-ant-***REDACTED***',      s)
+          s = re.sub(r'elnora_live_[A-Za-z0-9_\-]+',   'elnora_live_***REDACTED***', s)
+          s = re.sub(r'gh[pousr]_[A-Za-z0-9_]{20,}',   'ghX_***REDACTED***',         s)
+          s = re.sub(r'github_pat_[A-Za-z0-9_]{20,}',  'github_pat_***REDACTED***',  s)
           p.write_text(s)
           print(f"Scrubbed transcript: {len(s)} bytes")
           PY
@@ -262,9 +263,10 @@ jobs:
         run: |
           if (-not (Test-Path $env:ELNORA_HANDOFF_TRANSCRIPT)) { Write-Host "(no transcript)"; exit 0 }
           $s = Get-Content $env:ELNORA_HANDOFF_TRANSCRIPT -Raw
-          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',     'sk-ant-***REDACTED***')
-          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+', 'elnora_live_***REDACTED***')
-          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}', 'ghX_***REDACTED***')
+          $s = [regex]::Replace($s, 'sk-ant-[A-Za-z0-9_\-]+',       'sk-ant-***REDACTED***')
+          $s = [regex]::Replace($s, 'elnora_live_[A-Za-z0-9_\-]+',   'elnora_live_***REDACTED***')
+          $s = [regex]::Replace($s, 'gh[pousr]_[A-Za-z0-9_]{20,}',   'ghX_***REDACTED***')
+          $s = [regex]::Replace($s, 'github_pat_[A-Za-z0-9_]{20,}',  'github_pat_***REDACTED***')
           Set-Content -Path $env:ELNORA_HANDOFF_TRANSCRIPT -Value $s -NoNewline
           Write-Host "Scrubbed transcript"
 

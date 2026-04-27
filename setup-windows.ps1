@@ -42,20 +42,24 @@ function Update-SessionPath {
     # which would make the git-config block (and the verify summary) wrong.
     $machine = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
     $user    = [System.Environment]::GetEnvironmentVariable("Path", "User")
-    $parts   = @()
-    if ($machine) { $parts += $machine }
-    if ($user)    { $parts += $user }
+    # Split into individual entries so dedup works against single bin paths
+    # (without this, -notcontains compares the full PATH string and never
+    # matches, so $claudeBin/$elnoraBin get re-appended on every call).
+    $entries = @()
+    foreach ($src in @($machine, $user)) {
+        if ($src) { $entries += ($src -split ';' | Where-Object { $_ }) }
+    }
     # Claude Code installer writes to %USERPROFILE%\.local\bin - ensure it's present.
     $claudeBin = Join-Path $env:USERPROFILE ".local\bin"
-    if ((Test-Path $claudeBin) -and ($parts -notcontains $claudeBin)) {
-        $parts += $claudeBin
+    if ((Test-Path $claudeBin) -and ($entries -notcontains $claudeBin)) {
+        $entries += $claudeBin
     }
     # Elnora CLI installer writes to %USERPROFILE%\.elnora\bin - ensure it's present.
     $elnoraBin = Join-Path $env:USERPROFILE ".elnora\bin"
-    if ((Test-Path $elnoraBin) -and ($parts -notcontains $elnoraBin)) {
-        $parts += $elnoraBin
+    if ((Test-Path $elnoraBin) -and ($entries -notcontains $elnoraBin)) {
+        $entries += $elnoraBin
     }
-    $env:Path = ($parts -join ";")
+    $env:Path = ($entries -join ";")
 }
 
 # Self-defense: ensure user-local bin is on Path from line 1.
@@ -1277,33 +1281,29 @@ if ($env:ELNORA_SKIP_HANDOFF -eq "1" -or $env:ELNORA_HANDOFF_MODE -eq "headless"
             if ([string]::IsNullOrWhiteSpace($answer)) { $answer = "s" }
             switch -Regex ($answer) {
                 "^[Pp]" {
-                    # -AsSecureString so the typed key isn't echoed to the
-                    # host. Start-Transcript captures host output into
-                    # ~/claude-starter-install.log, so a plain Read-Host
-                    # would leak the elnora_live_* key into the very file
-                    # the customer is told to share with support.
-                    $elnoraSecure = Read-Host "      API key (starts with elnora_live_)" -AsSecureString
-                    $elnoraBstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($elnoraSecure)
-                    try {
-                        $elnoraKey = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($elnoraBstr)
-                    } finally {
-                        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($elnoraBstr)
-                    }
-                    if (-not [string]::IsNullOrWhiteSpace($elnoraKey)) {
-                        elnora auth login --api-key $elnoraKey *>$null
-                        if ($LASTEXITCODE -eq 0) {
-                            Write-Host "      [OK] Saved."
-                        } else {
-                            Write-Host "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
-                        }
-                        # Best-effort scrub of the plaintext copy from memory.
-                        $elnoraKey = $null
+                    # Hand off to elnora's interactive prompt instead of
+                    # collecting the key here and passing it via --api-key.
+                    # Two wins:
+                    #  1. No argv exposure. `elnora auth login --api-key <key>`
+                    #     would briefly expose the key via `Get-Process`/WMI
+                    #     to anything polling the process table.
+                    #  2. No log leak. elnora's promptSecret (see
+                    #     elnora-cli/src/lib/prompt.ts) masks input with `*`
+                    #     in raw mode, so Start-Transcript only captures
+                    #     asterisks -- never the elnora_live_* key.
+                    # Note: elnora exits 0 on Ctrl+C cancel too, so we
+                    # re-check auth status afterward instead of trusting
+                    # the exit code.
+                    elnora auth login
+                    $elnoraStatusAfter = elnora auth status 2>$null
+                    if ($elnoraStatusAfter -match '"authenticated"\s*:\s*true') {
+                        Write-Host "      [OK] Saved."
                     } else {
-                        Write-Host "      [SKIP] Empty key -- skipped."
+                        Write-Host "      [SKIP] Not authenticated. Try manually:  elnora auth login"
                     }
                 }
                 default {
-                    Write-Host "      [SKIP] To do later:  elnora auth login --api-key <key>"
+                    Write-Host "      [SKIP] To do later:  elnora auth login"
                 }
             }
         }

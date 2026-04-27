@@ -31,7 +31,7 @@ attaches to your existing Chrome process.
 
 | Requirement | Why | How to check |
 |-------------|-----|--------------|
-| **Node.js 20+** | `npx` runs the MCP package | `node -v` |
+| **Node.js 22 LTS** (installed by Phase 1) | `npx` runs the MCP package | `node -v` |
 | **Google Chrome 144+** | `--autoConnect` requires the new local debugging endpoint | `chrome://settings/help` |
 | **Chrome must be running** when Claude Code starts | `--autoConnect` attaches; it does not launch | n/a |
 | `chrome-devtools-mcp` reachable on npm | Pulled at runtime | `npm view chrome-devtools-mcp version` |

@@ -971,27 +971,28 @@ EOF
         read -r answer
         case "${answer:-s}" in
             [Pp]*)
-                printf "      API key (starts with elnora_live_): "
-                # `read -s` so the key isn't echoed to the terminal — and
-                # therefore not captured by the `tee "$LOG_FILE"` redirect
-                # at the top of the script. Otherwise the customer's
-                # elnora_live_* key ends up in ~/claude-starter-install.log,
-                # which is exactly the file they're encouraged to share with
-                # support if anything goes wrong.
-                read -rs elnora_key
-                printf "\n"
-                if [ -n "$elnora_key" ]; then
-                    if elnora auth login --api-key "$elnora_key" >/dev/null 2>&1; then
-                        echo "      [OK] Saved."
-                    else
-                        echo "      [FAIL] Login failed. Try manually:  elnora auth login --api-key <key>"
-                    fi
+                # Hand off to elnora's interactive prompt instead of
+                # collecting the key here and passing it via --api-key.
+                # Two wins:
+                #  1. No argv exposure. `elnora auth login --api-key <key>`
+                #     would briefly expose the key via `ps -E` to anything
+                #     polling the process table.
+                #  2. No log leak. elnora's promptSecret (see
+                #     elnora-cli/src/lib/prompt.ts) masks input with `*`
+                #     in raw mode, so the `tee "$LOG_FILE"` redirect at
+                #     the top of this script only captures asterisks --
+                #     never the elnora_live_* key.
+                # Note: elnora exits 0 on Ctrl+C cancel too, so we re-check
+                # auth status afterward instead of trusting the exit code.
+                elnora auth login || true
+                if elnora auth status 2>/dev/null | grep -q '"authenticated"[[:space:]]*:[[:space:]]*true'; then
+                    echo "      [OK] Saved."
                 else
-                    echo "      [SKIP] Empty key."
+                    echo "      [SKIP] Not authenticated. Try manually:  elnora auth login"
                 fi
                 ;;
             *)
-                echo "      [SKIP] To do later:  elnora auth login --api-key <key>"
+                echo "      [SKIP] To do later:  elnora auth login"
                 ;;
         esac
     fi
