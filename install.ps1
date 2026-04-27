@@ -33,59 +33,63 @@ Write-Host "  1. Download the starter kit to $TargetDir"
 Write-Host "  2. Run setup-windows.ps1 (installs Claude Code + dev tools)"
 Write-Host ""
 
-$FreshExtract = $false
-
+# Always wipe + re-extract on every run. If the customer is running this
+# script again it's because something didn't work the first time -- they
+# want a fresh starting point, not a half-stale copy of last week's repo.
+# System tools (Claude, Node, Python, Obsidian) are NOT touched here:
+# setup-windows.ps1 detects existing installs and updates in place, so
+# re-running won't blow away a working toolchain.
 if (Test-Path $TargetDir) {
-    Write-Host "Starter kit already exists at $TargetDir" -ForegroundColor Gray
-    Write-Host "Re-running setup from existing copy. Remove the folder to re-download." -ForegroundColor Gray
-} else {
-    Write-Host "Downloading starter kit zip..." -ForegroundColor Green
-    $zipUrl  = "https://github.com/$RepoOwner/$RepoName/archive/refs/heads/$Branch.zip"
-    $zipPath = Join-Path $env:TEMP "$RepoName-bootstrap.zip"
-    $tmpExtractDir = Join-Path $env:TEMP "$RepoName-bootstrap"
+    Write-Host "Existing starter kit detected at $TargetDir" -ForegroundColor Gray
+    Write-Host "Wiping for a fresh install (system tools like Claude, Node, Python are kept)..." -ForegroundColor Gray
+    Remove-Item -Path $TargetDir -Recurse -Force
+}
 
-    try {
-        # Retry up to 3 times on flaky networks (hotel / conference wifi).
-        # -TimeoutSec caps the whole request; retries cover transient DNS/TLS
-        # hiccups that return immediately instead of hanging.
-        $maxAttempts = 3
-        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            try {
-                Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 300
-                break
-            } catch {
-                if ($attempt -eq $maxAttempts) { throw }
-                Write-Host "  Download attempt $attempt failed: $($_.Exception.Message). Retrying in 2s..." -ForegroundColor Yellow
-                Start-Sleep -Seconds 2
-            }
+Write-Host "Downloading starter kit zip..." -ForegroundColor Green
+$zipUrl  = "https://github.com/$RepoOwner/$RepoName/archive/refs/heads/$Branch.zip"
+$zipPath = Join-Path $env:TEMP "$RepoName-bootstrap.zip"
+$tmpExtractDir = Join-Path $env:TEMP "$RepoName-bootstrap"
+
+try {
+    # Retry up to 3 times on flaky networks (hotel / conference wifi).
+    # -TimeoutSec caps the whole request; retries cover transient DNS/TLS
+    # hiccups that return immediately instead of hanging.
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 300
+            break
+        } catch {
+            if ($attempt -eq $maxAttempts) { throw }
+            Write-Host "  Download attempt $attempt failed: $($_.Exception.Message). Retrying in 2s..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
         }
-        if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force }
-        Expand-Archive -Path $zipPath -DestinationPath $tmpExtractDir -Force
-
-        $extracted = Join-Path $tmpExtractDir "$RepoName-$Branch"
-        if (-not (Test-Path $extracted)) {
-            throw "Expected folder not found after extract: $extracted"
-        }
-
-        New-Item -ItemType Directory -Path (Split-Path $TargetDir -Parent) -Force -ErrorAction SilentlyContinue | Out-Null
-        Move-Item -Path $extracted -Destination $TargetDir -Force
-        Write-Host "Extracted to $TargetDir" -ForegroundColor Green
-        $FreshExtract = $true
-    } catch {
-        Write-Host "[!] Failed to download starter kit from $zipUrl" -ForegroundColor Red
-        Write-Host "    Reason: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host "    Check your internet connection and retry:" -ForegroundColor Red
-        Write-Host "      irm https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Branch/install.ps1 | iex" -ForegroundColor Red
-        # `throw` instead of `exit 1`: this script is invoked via `irm ... | iex`,
-        # which runs in the caller's scope. `exit` would terminate the caller's
-        # shell/parent script silently; `throw` surfaces as a catchable error and
-        # still halts this installer if uncaught. Same reasoning as Bug 2 in the
-        # elnora-cli handoff doc.
-        throw "Starter kit bootstrap: failed to download from $zipUrl ($($_.Exception.Message))"
-    } finally {
-        if (Test-Path $zipPath)       { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
+    if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force }
+    Expand-Archive -Path $zipPath -DestinationPath $tmpExtractDir -Force
+
+    $extracted = Join-Path $tmpExtractDir "$RepoName-$Branch"
+    if (-not (Test-Path $extracted)) {
+        throw "Expected folder not found after extract: $extracted"
+    }
+
+    New-Item -ItemType Directory -Path (Split-Path $TargetDir -Parent) -Force -ErrorAction SilentlyContinue | Out-Null
+    Move-Item -Path $extracted -Destination $TargetDir -Force
+    Write-Host "Extracted to $TargetDir" -ForegroundColor Green
+} catch {
+    Write-Host "[!] Failed to download starter kit from $zipUrl" -ForegroundColor Red
+    Write-Host "    Reason: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "    Check your internet connection and retry:" -ForegroundColor Red
+    Write-Host "      irm https://raw.githubusercontent.com/$RepoOwner/$RepoName/$Branch/install.ps1 | iex" -ForegroundColor Red
+    # `throw` instead of `exit 1`: this script is invoked via `irm ... | iex`,
+    # which runs in the caller's scope. `exit` would terminate the caller's
+    # shell/parent script silently; `throw` surfaces as a catchable error and
+    # still halts this installer if uncaught. Same reasoning as Bug 2 in the
+    # elnora-cli handoff doc.
+    throw "Starter kit bootstrap: failed to download from $zipUrl ($($_.Exception.Message))"
+} finally {
+    if (Test-Path $zipPath)       { Remove-Item $zipPath -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $tmpExtractDir) { Remove-Item $tmpExtractDir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 Set-Location $TargetDir
@@ -100,16 +104,19 @@ Remove-Item -Path (Join-Path $TargetDir "tests")   -Recurse -Force -ErrorAction 
 Remove-Item -Path (Join-Path $TargetDir ".github") -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "  Done." -ForegroundColor Gray
 
-# On fresh extract, write a marker file recording the SHA256 of
-# INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-windows.ps1
-# verifies this hash before handing off to claude with bypassPermissions --
-# if a third party tampers with the doc between extract and setup, the
-# verify step trips and the handoff aborts. This is the trust anchor for
-# the headless Phase 2 flow. Only written on FRESH extract (re-bless on
-# every run would defeat the verify).
+# Write a marker file recording the SHA256 of INSTALL_FOR_AGENTS.md as it was
+# extracted from GitHub. setup-windows.ps1 verifies this hash before handing
+# off to claude with bypassPermissions -- if a third party tampers with the
+# doc between extract and setup, the verify step trips and the handoff
+# aborts. This is the trust anchor for the headless Phase 2 flow.
+#
+# Every install.ps1 run is a fresh extract from the official zip (we always
+# wipe + re-download above), so re-blessing here is correct: the doc is
+# always exactly what GitHub just served, and the marker stays in lockstep
+# with whatever INSTALL_FOR_AGENTS.md content the customer is about to run.
 $markerPath = Join-Path $TargetDir ".elnora-starter-kit-marker"
 $installForAgentsPath = Join-Path $TargetDir "INSTALL_FOR_AGENTS.md"
-if ($FreshExtract -and (Test-Path -LiteralPath $installForAgentsPath)) {
+if (Test-Path -LiteralPath $installForAgentsPath) {
     $hash = (Get-FileHash -Path $installForAgentsPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $markerContent = "version: 1`ncreated: $now`ninstall_for_agents_sha256: $hash`n"
