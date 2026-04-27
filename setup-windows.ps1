@@ -708,17 +708,21 @@ if (-not $nodeMajorOk) {
         } else {
             Write-Host "[3/9] Installing Node.js 22 LTS..." -ForegroundColor Green
         }
-        # Pin to Node 22.x — the Node "LTS" alias rolls forward; without
-        # pinning, winget recently jumped to Node 24 while macOS (`brew
-        # install node@22`) still ships Node 22, which left the two
-        # platforms on different majors after running the same installer.
-        # Bump $nodeWinVersion when Node 22's patchline moves and you want
-        # CI on the newer one. Node 22 is in LTS Maintenance through
-        # April 2027; switch to `OpenJS.NodeJS.LTS` (unpinned) once we're
-        # ready to promote to whatever the next LTS major is — at which
-        # point macOS should bump `node@22` -> `node@<new>` in lockstep.
-        $nodeWinVersion = "22.20.0"
-        Invoke-Step "Node.js" { winget install --id OpenJS.NodeJS.LTS --version $nodeWinVersion --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
+        # Pin to Node 22.x — the `OpenJS.NodeJS.LTS` alias rolls forward
+        # and currently only has Node 24 manifests in the winget catalog,
+        # which left mac (`brew install node@22`) and Windows on different
+        # majors after the same installer. Use `OpenJS.NodeJS` (the
+        # major-tracked package) instead — it carries every patchline of
+        # every major, so we can pin to a specific 22.x.y that matches
+        # what `node@22` resolves to on Homebrew.
+        #
+        # Bump $nodeWinVersion in lockstep with whatever `brew info node@22`
+        # reports as the current bottle. As of this commit, both resolve
+        # to 22.22.2. When Node 22 ages out of LTS (April 2027) flip to
+        # the next LTS major and bump macOS's `node@22` -> `node@<new>`
+        # in the same change.
+        $nodeWinVersion = "22.22.2"
+        Invoke-Step "Node.js" { winget install --id OpenJS.NodeJS --version $nodeWinVersion --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
         Update-SessionPath
     }
 } else {
@@ -1586,12 +1590,22 @@ if ($claudeAvailable) {
         # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
         # create + push + verify) runs in full, so 80 leaves ~30-turn
         # headroom for transient retries (network, tool errors).
+        #
+        # The trailing `| Out-Null` is load-bearing (mirrors the Mac script's
+        # `> /dev/null` after `tee`): Start-Transcript captures everything
+        # written to the host, so without Out-Null the JSONL stream would land
+        # in BOTH the transcript file AND ~/claude-starter-install.log -
+        # bloating the install log and embedding the agent's own conversation
+        # (including the literal text "FAILED:" inside INSTALL_FOR_AGENTS.md)
+        # where the next agent's grep FAILED: will hit it as false positives.
+        # Send JSONL to transcript only; the workflow has a separate "Show
+        # handoff transcript" step for live debugging.
         & claude -p $HandoffPrompt `
             --permission-mode bypassPermissions `
             --output-format stream-json `
             --verbose `
             --max-turns 80 `
-          | Tee-Object -FilePath $transcript
+          | Tee-Object -FilePath $transcript | Out-Null
         $rc = $LASTEXITCODE
         Write-Host ""
         Write-Host "claude -p exited with code $rc (transcript saved to $transcript)" -ForegroundColor Cyan
