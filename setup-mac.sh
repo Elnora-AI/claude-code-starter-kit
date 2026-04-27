@@ -515,6 +515,24 @@ if ! $node_major_ok; then
     # beginner. HOMEBREW_NO_ENV_HINTS=1 trims them down without hiding
     # genuine error output, so run_step's capture still has something
     # meaningful to quote in the FAILURE box if the install fails.
+    #
+    # CI-only: GitHub's macos runner image preinstalls and links node@20
+    # (or whatever LTS the image baseline shipped). When `brew install
+    # node@22` runs against an image that already has a different node@N
+    # linked, brew emits a yellow `##[warning]node@22 was installed but
+    # not linked because node@<other> is already linked` annotation that
+    # the next `brew link --force --overwrite` resolves anyway — but the
+    # warning surfaces in the GH Actions UI as run-summary noise. Pre-
+    # unlink whatever node is linked before installing so the warning
+    # never fires. Real-user machines almost never hit this path
+    # (Homebrew default doesn't ship a pre-linked node), so we gate on
+    # CI/GITHUB_ACTIONS and don't touch user installs.
+    if [ "${CI:-}" = "true" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+        brew unlink node &>/dev/null || true
+        for kg in node@20 node@21 node@23 node@24; do
+            brew unlink "$kg" &>/dev/null || true
+        done
+    fi
     if HOMEBREW_NO_ENV_HINTS=1 run_step "Node.js" brew install node@22; then
         brew link --force --overwrite node@22 &>/dev/null || true
         hash -r 2>/dev/null || true

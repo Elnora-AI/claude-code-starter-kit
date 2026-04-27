@@ -183,6 +183,14 @@ jobs:
           # The vault-staging step above DID stage a vault, so tell
           # assert.sh to enforce the placeholder-replacement check.
           KB_STAGED: "1"
+          # Step 11 cleanup deletes INSTALL_FOR_AGENTS.md from the install
+          # target, but the hardening regression check still needs to read
+          # the doc to scan for re-introduced sensitive-paths bypasses.
+          # Point assert.sh at the original workspace checkout (untouched
+          # by Phase 2) so the regression check has a stable source.
+          # github.workspace is a runner-set context value, not user input
+          # — same pattern as handoff-e2e.yml. Safe to interpolate.
+          ELNORA_KIT_SOURCE_DIR: ${{ github.workspace }}
         run: |
           # Assertions run against the install target dir (where install.sh
           # placed the kit), NOT the checkout. The checkout is just the
@@ -330,6 +338,12 @@ jobs:
           # The vault-staging step above DID stage a vault, so tell
           # assert.ps1 to enforce the placeholder-replacement check.
           KB_STAGED: "1"
+          # Step 11 cleanup deletes INSTALL_FOR_AGENTS.md from the install
+          # target. Point assert.ps1 at the original workspace checkout so
+          # the hardening regression check has a stable source — same
+          # pattern as handoff-e2e.yml. github.workspace is runner-set,
+          # not user input.
+          ELNORA_KIT_SOURCE_DIR: ${{ github.workspace }}
         run: |
           $target = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
           & "$env:GITHUB_WORKSPACE\tests\handoff\assert.ps1" -RepoDir $target -Transcript $env:ELNORA_HANDOFF_TRANSCRIPT

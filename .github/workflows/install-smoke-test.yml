@@ -123,7 +123,12 @@ jobs:
           bash setup-mac.sh
 
       - name: Show install log
-        if: always()
+        # Only on failure: on success, the install log is identical to what
+        # was already streamed by the Run step above, so dumping it again
+        # ~doubles the job log size for no debug benefit. The "Fail if any
+        # in-script step reported FAILURE" gate below still asserts on the
+        # log file regardless.
+        if: failure()
         run: |
           echo "=== ~/claude-starter-install.log ==="
           cat "$HOME/claude-starter-install.log" || echo "(log not produced)"
@@ -192,7 +197,10 @@ jobs:
           .\setup-windows.ps1
 
       - name: Show install log
-        if: always()
+        # Only on failure: see matching comment on the macOS step. On
+        # success the install log duplicates the Run step output exactly,
+        # which roughly doubles each job's log volume for no upside.
+        if: failure()
         shell: pwsh
         run: |
           Write-Host "=== claude-starter-install.log ==="
