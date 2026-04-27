@@ -91,13 +91,18 @@ mode, follow these adjustments:
 
       ```
       export GH_TOKEN="$ELNORA_HANDOFF_GH_TOKEN"
+      gh auth setup-git
       ```
 
       Don't run `gh auth login --with-token` — the test PAT may lack the
       `read:org` scope that command validates, even though the token is
-      fully functional for repo creation. With `GH_TOKEN` exported, every
-      subsequent `gh` and `git` push call inherits the token via gh's
-      built-in credential helper.
+      fully functional for repo creation. With `GH_TOKEN` exported, `gh`
+      itself is authenticated immediately. The follow-up `gh auth
+      setup-git` wires git to use gh's credential helper for HTTPS URLs.
+      Skip it and step 6c.5's `git fetch origin` will fail with "could
+      not read Username for https://github.com" — `GH_TOKEN` alone
+      doesn't configure git's credential.helper on a fresh shell, only
+      gh's own HTTP layer.
 
       Then run the 6b verification gates as written. Do **not** embed
       the token in the remote URL
@@ -180,6 +185,14 @@ tail -100 ~/claude-starter-install.log
 ```
 
 (On Windows: `Get-Content $env:USERPROFILE\claude-starter-install.log -Tail 100`.)
+
+> **Do NOT use the Read tool on the install log.** On macOS the log routinely
+> exceeds the Read tool's 25K-token limit (Homebrew bottle pour output is
+> noisy: `~/claude-starter-install.log` can be 28-30K tokens). Read will
+> fail with "File content (X tokens) exceeds maximum allowed tokens (25000)"
+> and you'll waste a turn retrying. Always use `tail -100` (or
+> `Get-Content -Tail 100` on Windows) — that's enough to spot any
+> `FAILED:` markers from the most recent install pass.
 
 Tell the user: "I'm reading the install log to see what got installed and
 whether anything failed." Note any `FAILED` markers — you'll fix them in step 2.
