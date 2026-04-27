@@ -155,7 +155,60 @@ push didn't land on `origin/main`.
 
 ---
 
-## 7. "The setup script half-failed"
+## 7. "VS Code opened but Claude never started" (auto-task prompt missed)
+
+**Symptom:** Phase 1 said `Opening VS Code - Claude will continue Phase 2
+setup there`, your bootstrap terminal exited cleanly, VS Code came up at
+the starter-kit folder, but no terminal panel ever opened with Claude
+running. You may have seen a yellow popup at the bottom-right and dismissed
+it without reading.
+
+**What happened:** VS Code has *two* one-time security prompts on first
+open of a workspace with auto-running tasks:
+
+1. **"Do you trust the authors of the files in this folder?"** — Workspace
+   Trust. Without this, no task can run at all.
+2. **"This workspace has tasks ... that can launch processes automatically.
+   Do you want to allow automatic tasks ...?"** — the `task.allowAutomaticTasks`
+   gate. Without this, even trusted workspaces don't auto-fire `runOn`
+   tasks. **This is the prompt people miss** because it appears as a small
+   notification, not a blocking dialog.
+
+If you clicked **Disallow**, dismissed the prompt, or just didn't notice
+it, the handoff task is configured but inert.
+
+**Fix — pick whichever you prefer:**
+
+- **Just run the handoff manually (fastest).** Open the integrated terminal
+  in VS Code (Ctrl+backtick, or `View → Terminal`) and run:
+  ```
+  bash .vscode/run-handoff.sh           # macOS / Linux
+  ```
+  ```
+  powershell -ExecutionPolicy Bypass -File .vscode\run-handoff.ps1   # Windows
+  ```
+  This is the same script the auto-task fires; it consumes the same
+  one-shot sentinel and starts Claude on the Phase 2 prompt.
+
+- **Re-arm the auto-task for next time.** Open VS Code's command palette
+  (`Cmd+Shift+P` / `Ctrl+Shift+P`) and run **`Tasks: Manage Automatic Tasks`**.
+  Pick **Allow Automatic Tasks**. VS Code remembers this globally, so every
+  future trusted workspace (including future starter-kit installs) will
+  auto-fire without prompting.
+
+- **Just open Claude in the terminal yourself.** If you'd rather skip the
+  task system entirely, run:
+  ```
+  claude "Phase 1 of the Elnora Starter Kit install just completed. Please read INSTALL_FOR_AGENTS.md in this directory and finish Phase 2 setup."
+  ```
+  This is byte-identical to what the helper does.
+
+Any of the three gets you to the same place: Claude reading
+`INSTALL_FOR_AGENTS.md` and finishing Phase 2.
+
+---
+
+## 8. "The setup script half-failed"
 
 **Symptom:** the script finished but printed `⚠ N step(s) failed — remediation
 below`. Some tools are installed, others aren't.

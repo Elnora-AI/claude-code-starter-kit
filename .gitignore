@@ -66,6 +66,12 @@ azure-*.json
 # not user content — keep it out of customers' initial commit.
 .elnora-starter-kit-marker
 
+# One-shot Phase 1 -> Phase 2 handoff sentinel. setup-mac.sh / setup-windows.ps1
+# write the literal handoff prompt into this file, then open VS Code; the
+# .vscode/run-handoff.{sh,ps1} helper reads it once and deletes it. Pure
+# runtime state — never committed.
+.vscode/.handoff-pending
+
 # Runtime scratch folder — regenerable state, logs, downloaded artifacts
 # Keep the folder (README + .gitkeep) but ignore everything else inside
 cache/*
