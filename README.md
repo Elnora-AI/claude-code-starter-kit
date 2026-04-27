@@ -1,15 +1,43 @@
 # Elnora Starter Kit
 
-One-command setup that installs and connects [Elnora AI](https://elnora.ai),
-Claude Code, Python, Node.js, and supporting dev tools into a single
-workflow for generating preclinical lab protocols. Targeted at users who have not used a
-terminal before.
+One-command setup that installs and wires together [Elnora AI](https://elnora.ai),
+Claude Code, and the supporting dev tools (Python, Node.js, Git, GitHub CLI,
+VS Code, Obsidian) needed to use them productively from the terminal.
+
+## Who this is for
+
+**Primarily: Elnora customers — biologists, scientists, and non-technical
+founders** who haven't used Claude Code in the terminal yet and want the
+fastest path from "I have an Elnora account" to "I'm generating protocols
+and automating my day-to-day lab work from the command line." This kit is
+the batteries-included version of that setup so you don't have to chase
+down installers, configure MCP servers, or learn what `brew` is on day one.
+
+**Also welcome:** anyone — engineers included — who wants to:
+
+- **Bootstrap their first Claude Code project** with a known-good baseline
+  (settings, plugins, MCP wiring, knowledge-base config) instead of an empty
+  directory.
+- **Validate or debug an existing Claude Code setup** — re-run the install
+  to see what's missing, what's misconfigured, or what's worth turning on.
+- **Evaluate different setups and configurations** — the kit documents what
+  each piece does and why, so it's a useful reference even if you don't
+  install it.
+- **Use it as a template** to start building your own repo, agents, plugins,
+  and skills on top of a working foundation.
+
+You don't need to be an Elnora customer to use the kit. The Elnora pieces
+are the default flavor, but the rest of the workflow (Claude Code, plugins,
+knowledge base, GitHub repo) stands on its own.
 
 ## Requirements
 
 - macOS or Windows 10/11
 - Active Claude Pro or Max subscription ([upgrade](https://claude.com/upgrade))
 - Elnora API key ([platform.elnora.ai/settings](https://platform.elnora.ai/settings))
+  — only needed if you want the Elnora CLI/MCP flow. Skip it if you're using
+  the kit purely as a Claude Code starter template; the rest of the install
+  still works.
 
 ## Install
 
