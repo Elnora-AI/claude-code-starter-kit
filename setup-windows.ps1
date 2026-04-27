@@ -419,12 +419,21 @@ Write-Host ""
 # + VS Code + GitHub CLI + Obsidian that's 200+ lines of pure noise and
 # obscures real errors.
 #
-# Drop lines that are pure progress-bar content: solid block / shade chars
-# (U+2588, U+2592, U+2591, plus the half-block family U+2580..U+2590), the
-# trailing percentage indicator, and the byte/byte rate readouts winget
-# emits during downloads. Real error/info lines from winget are full prose
-# ("Found Microsoft.VisualStudioCode...", "Successfully installed",
-# "Installer hash does not match", etc.) and don't match.
+# Drop lines that are pure progress-bar content. Three flavours show up:
+#   1. Block-char fills, e.g. `\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588 30.9 MB / 30.9 MB` \u2014 solid
+#      block / shade chars (U+2588, U+2592, U+2591, plus the half-block
+#      family U+2580..U+2590), with optional byte/byte readouts.
+#   2. ASCII rotating-spinner frames during downloads \u2014 single
+#      backslash, pipe, or forward-slash on a line of mostly whitespace
+#      (`   \ `, `   | `, `   / `). winget emits these even with
+#      --disable-interactivity in CI; without filtering them, the live
+#      log gets a flood of one-char lines (~600 lines per smoke run).
+#   3. Trailing percentage / byte readouts that survived after the bar
+#      itself drained.
+#
+# Real error/info lines from winget are full prose ("Found
+# Microsoft.VisualStudioCode...", "Successfully installed", "Installer
+# hash does not match", etc.) and don't match.
 #
 # Pattern uses .NET regex \uXXXX escapes (ASCII source bytes) so the file
 # stays clean for the ASCII-lint check; the regex engine still matches the
@@ -433,7 +442,7 @@ Write-Host ""
 # These lines are still recorded in Invoke-Step's capture buffer, so if a
 # winget call exits non-zero the FAILURE box still has the full byte trail
 # for debugging.
-$wingetNoisePattern = '^[\s\u2580-\u2593\-]+$|^\s*\d+(\.\d+)?\s*%\s*$|^\s*\d+(\.\d+)?\s*[KMG]?B\s*/\s*\d+(\.\d+)?\s*[KMG]?B\s*$|^[\s\u2580-\u2593]+\s*\d+(\.\d+)?\s*%\s*$'
+$wingetNoisePattern = '^[\s\u2580-\u2593\\\-|/]+$|^\s*\d+(\.\d+)?\s*%\s*$|^\s*\d+(\.\d+)?\s*[KMG]?B\s*/\s*\d+(\.\d+)?\s*[KMG]?B\s*$|^[\s\u2580-\u2593]+\s*\d+(\.\d+)?\s*%\s*$'
 
 # --- Check for winget ---
 $hasWinget = Get-Command winget -ErrorAction SilentlyContinue
@@ -515,8 +524,14 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     } else {
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$claudeBinDir*") {
-            Write-Host "  [!] User PATH did not persist '.local\bin' - Group Policy may be reverting." -ForegroundColor Yellow
-            Write-Host "      Attempting fallback: copy claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            Write-Host "  [!] User PATH does not contain '.local\bin' after install." -ForegroundColor Yellow
+            Write-Host "      Common causes: corporate Group Policy reverting User PATH," -ForegroundColor Yellow
+            Write-Host "      antivirus blocking the installer's PATH update, or running" -ForegroundColor Yellow
+            Write-Host "      from a non-interactive shell (CI, scheduled task)." -ForegroundColor Yellow
+            Write-Host "      Falling back: copying claude.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            Write-Host "      Heads up: this fallback copy will NOT auto-update with Claude Code releases." -ForegroundColor Yellow
+            Write-Host "      Re-run this script (or 'irm https://claude.ai/install.ps1 | iex')" -ForegroundColor Yellow
+            Write-Host "      to refresh after upstream releases. See RECOVERY.md for details." -ForegroundColor Yellow
             if (-not (Copy-StandaloneExeToWindowsApps -ExePath $claudeExe -ToolName "claude")) {
                 [void]$FailedSteps.Add("Claude Code PATH")
             }
@@ -624,8 +639,14 @@ if (-not $elnoraIsInstalled) {
     } else {
         $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
         if ($userPath -notlike "*$elnoraBinDir*") {
-            Write-Host "  [!] User PATH did not persist '.elnora\bin' - Group Policy may be reverting." -ForegroundColor Yellow
-            Write-Host "      Attempting fallback: copy elnora.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            Write-Host "  [!] User PATH does not contain '.elnora\bin' after install." -ForegroundColor Yellow
+            Write-Host "      Common causes: corporate Group Policy reverting User PATH," -ForegroundColor Yellow
+            Write-Host "      antivirus blocking the installer's PATH update, or running" -ForegroundColor Yellow
+            Write-Host "      from a non-interactive shell (CI, scheduled task)." -ForegroundColor Yellow
+            Write-Host "      Falling back: copying elnora.exe to WindowsApps (always on default user PATH)." -ForegroundColor Yellow
+            Write-Host "      Heads up: this fallback copy will NOT auto-update with Elnora releases." -ForegroundColor Yellow
+            Write-Host "      Re-run this script (or the Elnora installer) to refresh after" -ForegroundColor Yellow
+            Write-Host "      upstream releases. See RECOVERY.md for details." -ForegroundColor Yellow
             if (-not (Copy-StandaloneExeToWindowsApps -ExePath $elnoraExe -ToolName "elnora")) {
                 [void]$FailedSteps.Add("Elnora CLI PATH")
             }
@@ -683,11 +704,21 @@ if (-not $nodeMajorOk) {
         }
     } else {
         if ($nodeCurrentVersion) {
-            Write-Host "[3/9] Detected Node $nodeCurrentVersion, upgrading to LTS (>=22)..." -ForegroundColor Yellow
+            Write-Host "[3/9] Detected Node $nodeCurrentVersion, upgrading to Node 22 LTS..." -ForegroundColor Yellow
         } else {
-            Write-Host "[3/9] Installing Node.js LTS (>=22)..." -ForegroundColor Green
+            Write-Host "[3/9] Installing Node.js 22 LTS..." -ForegroundColor Green
         }
-        Invoke-Step "Node.js" { winget install OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
+        # Pin to Node 22.x — the Node "LTS" alias rolls forward; without
+        # pinning, winget recently jumped to Node 24 while macOS (`brew
+        # install node@22`) still ships Node 22, which left the two
+        # platforms on different majors after running the same installer.
+        # Bump $nodeWinVersion when Node 22's patchline moves and you want
+        # CI on the newer one. Node 22 is in LTS Maintenance through
+        # April 2027; switch to `OpenJS.NodeJS.LTS` (unpinned) once we're
+        # ready to promote to whatever the next LTS major is — at which
+        # point macOS should bump `node@22` -> `node@<new>` in lockstep.
+        $nodeWinVersion = "22.20.0"
+        Invoke-Step "Node.js" { winget install --id OpenJS.NodeJS.LTS --version $nodeWinVersion --accept-package-agreements --accept-source-agreements --disable-interactivity --silent } -SuppressPattern $wingetNoisePattern
         Update-SessionPath
     }
 } else {
