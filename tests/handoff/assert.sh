@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================
-# Handoff E2E — post-state assertions (macOS / Linux)
+# Handoff E2E -- post-state assertions (macOS / Linux)
 # ============================================================
 # Run AFTER the headless handoff completes. Verifies on disk
-# that Claude actually did the Phase 2 work — independent of
+# that Claude actually did the Phase 2 work -- independent of
 # what the transcript says.
 #
 # Usage:
@@ -24,8 +24,8 @@ PASS=0
 FAIL=0
 FAIL_MSGS=()
 
-ok()   { echo "  ✓ $1"; PASS=$((PASS+1)); }
-fail() { echo "  ✗ $1"; FAIL=$((FAIL+1)); FAIL_MSGS+=("$1"); }
+ok()   { echo "  [OK] $1"; PASS=$((PASS+1)); }
+fail() { echo "  [FAIL] $1"; FAIL=$((FAIL+1)); FAIL_MSGS+=("$1"); }
 
 cd "$REPO_DIR" || { echo "FATAL: cannot cd to $REPO_DIR"; exit 2; }
 
@@ -38,18 +38,18 @@ echo ""
 
 # --- Elnora CLI auth ---
 # The CLI persists credentials to ~/.elnora/profiles.toml via
-# `elnora auth login --api-key …`. Verify Claude actually authenticated
-# the CLI (not just exported a useless .env file — the CLI doesn't read
+# `elnora auth login --api-key ...`. Verify Claude actually authenticated
+# the CLI (not just exported a useless .env file -- the CLI doesn't read
 # .env, so writing it does nothing for future shells).
 echo "[elnora auth]"
 if [ -f "$HOME/.elnora/profiles.toml" ]; then
     ok "~/.elnora/profiles.toml exists"
     # Note: the CLI sets mode 600 itself; we don't re-check it here. The
     # customer-visible contract for the starter kit is "key persisted +
-    # auth status returns success" (covered below) — re-validating the
+    # auth status returns success" (covered below) -- re-validating the
     # CLI's own file-mode behavior isn't this test's responsibility, and
     # there's no equivalent ACL check on Windows anyway.
-    # Allow leading whitespace — TOML lets `api_key = ...` appear indented
+    # Allow leading whitespace -- TOML lets `api_key = ...` appear indented
     # inside a [profile] table section, and the CLI is free to format that way.
     if grep -qE '^[[:space:]]*api_key[[:space:]]*=[[:space:]]*"elnora_live_' "$HOME/.elnora/profiles.toml"; then
         ok "profiles.toml contains api_key = elnora_live_*"
@@ -57,7 +57,7 @@ if [ -f "$HOME/.elnora/profiles.toml" ]; then
         fail "profiles.toml missing api_key = \"elnora_live_*\" line"
     fi
 else
-    fail "~/.elnora/profiles.toml was not created (Claude did not run 'elnora auth login --api-key …')"
+    fail "~/.elnora/profiles.toml was not created (Claude did not run 'elnora auth login --api-key ...')"
 fi
 if elnora auth status >/dev/null 2>&1; then
     ok "elnora auth status returns success"
@@ -78,7 +78,7 @@ if [ -d .git ]; then
     if [ "$commit_count" -eq 2 ]; then
         ok "git history has $commit_count commits (initial + cleanup) on $(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || echo '?')"
     elif [ "$commit_count" -eq 1 ]; then
-        fail "git history has 1 commit (cleanup commit didn't land — Phase 2 step 11 incomplete)"
+        fail "git history has 1 commit (cleanup commit didn't land -- Phase 2 step 11 incomplete)"
     elif [ "$commit_count" -eq 0 ]; then
         fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
     else
@@ -88,7 +88,7 @@ if [ -d .git ]; then
     # asked the agent to do the GitHub bootstrap.
     remote_count=$(git -C "$REPO_DIR" remote 2>/dev/null | wc -l | tr -d ' ')
     if [ -n "${ELNORA_HANDOFF_REPO_NAME:-}" ]; then
-        # PAT path — expect exactly one remote 'origin' pointing at the
+        # PAT path -- expect exactly one remote 'origin' pointing at the
         # CI-named repo, with HEAD == origin/main and visibility = PRIVATE.
         if [ "$remote_count" -eq 1 ] && [ "$(git -C "$REPO_DIR" remote)" = "origin" ]; then
             ok "exactly one remote 'origin' configured"
@@ -119,9 +119,9 @@ if [ -d .git ]; then
             fail "expected GitHub repo $ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE, got '${visibility:-<unreachable>}'"
         fi
     else
-        # Legacy headless path — no PAT provisioned, GitHub bootstrap skipped.
+        # Legacy headless path -- no PAT provisioned, GitHub bootstrap skipped.
         if [ "$remote_count" -eq 0 ]; then
-            ok "no git remotes configured (expected — GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
+            ok "no git remotes configured (expected -- GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
         else
             fail "expected 0 remotes (no PAT provisioned), found $remote_count: $(git -C "$REPO_DIR" remote | tr '\n' ' ')"
         fi
@@ -132,7 +132,7 @@ fi
 
 # --- Knowledge base config ---
 # The doc tells the agent to ALWAYS write `.claude/knowledge-base.local.md`,
-# even when no vault was found — leaving `vault_path:` as the
+# even when no vault was found -- leaving `vault_path:` as the
 # `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder. So the file's existence is
 # always required; the placeholder-replaced check only fires when the test
 # fixture actually staged a vault (signalled by KB_STAGED=1).
@@ -173,12 +173,12 @@ cleanup_files="install.sh install.ps1 setup-mac.sh setup-windows.ps1 INSTALL_FOR
 cleanup_ok=1
 for f in $cleanup_files; do
     if [ -e "$f" ]; then
-        fail "step 11 cleanup did not remove '$f' — still present after handoff"
+        fail "step 11 cleanup did not remove '$f' -- still present after handoff"
         cleanup_ok=0
     fi
 done
 if [ -d .vscode ]; then
-    fail "step 11 cleanup did not remove '.vscode/' — still present after handoff"
+    fail "step 11 cleanup did not remove '.vscode/' -- still present after handoff"
     cleanup_ok=0
 fi
 if [ "$cleanup_ok" -eq 1 ]; then
@@ -189,7 +189,7 @@ fi
 # Regression check: PR1 of the security plan removed the python3 -c bypass
 # instructions that gave agents a generic file-write primitive against
 # .claude/ paths. The doc still mentions `python3 -c` inside backticks
-# ("do **not** use python3 -c …") which is fine; we only fail on actual
+# ("do **not** use python3 -c ...") which is fine; we only fail on actual
 # code-block invocations and on python file-opens against .claude/ paths.
 #
 # After step 11 cleanup the post-handoff repo no longer contains
@@ -217,7 +217,7 @@ if [ -n "$hardening_path" ]; then
         ok "$hardening_path has no python open() against .claude/ paths"
     fi
 else
-    echo "  - INSTALL_FOR_AGENTS.md not present in $REPO_DIR or via ELNORA_KIT_SOURCE_DIR — hardening regression check skipped"
+    echo "  - INSTALL_FOR_AGENTS.md not present in $REPO_DIR or via ELNORA_KIT_SOURCE_DIR -- hardening regression check skipped"
 fi
 
 # --- HANDOFF_COMPLETE marker in transcript ---

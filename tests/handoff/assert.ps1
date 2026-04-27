@@ -1,8 +1,8 @@
 # ============================================================
-# Handoff E2E — post-state assertions (Windows)
+# Handoff E2E -- post-state assertions (Windows)
 # ============================================================
 # Run AFTER the headless handoff completes. Verifies on disk
-# that Claude actually did the Phase 2 work — independent of
+# that Claude actually did the Phase 2 work -- independent of
 # what the transcript says.
 #
 # Usage:
@@ -52,14 +52,14 @@ Write-Host ""
 
 # --- Elnora CLI auth ---
 # The CLI persists credentials to ~/.elnora/profiles.toml via
-# `elnora auth login --api-key …`. Verify Claude actually authenticated
-# the CLI (not just wrote a useless .env file — the CLI doesn't read .env).
+# `elnora auth login --api-key ...`. Verify Claude actually authenticated
+# the CLI (not just wrote a useless .env file -- the CLI doesn't read .env).
 Write-Host "[elnora auth]"
 $profilesPath = Join-Path $env:USERPROFILE ".elnora\profiles.toml"
 if (Test-Path $profilesPath) {
     Assert-Ok "$profilesPath exists"
     $profilesContent = Get-Content $profilesPath -Raw
-    # Allow leading whitespace — TOML lets `api_key = ...` appear indented
+    # Allow leading whitespace -- TOML lets `api_key = ...` appear indented
     # inside a [profile] table section, and the CLI is free to format that way.
     if ($profilesContent -match '(?m)^\s*api_key\s*=\s*"elnora_live_') {
         Assert-Ok "profiles.toml contains api_key = elnora_live_*"
@@ -67,11 +67,11 @@ if (Test-Path $profilesPath) {
         Assert-Fail "profiles.toml missing api_key = `"elnora_live_*`" line"
     }
 } else {
-    Assert-Fail "$profilesPath was not created (Claude did not run 'elnora auth login --api-key …')"
+    Assert-Fail "$profilesPath was not created (Claude did not run 'elnora auth login --api-key ...')"
 }
 # Resolve the CLI binary explicitly. The Phase 1 install adds it to PATH for
 # subsequent shells via setx, but a fresh pwsh step in CI doesn't always
-# inherit that — Get-Command can come up empty even though the binary is on
+# inherit that -- Get-Command can come up empty even though the binary is on
 # disk. Fall back to the known install location before declaring auth dead.
 $elnoraExe = (Get-Command elnora -ErrorAction SilentlyContinue).Source
 if (-not $elnoraExe) {
@@ -105,7 +105,7 @@ if (Test-Path .git) {
     if ($commitCount -eq 2) {
         Assert-Ok "git history has 2 commits (initial + cleanup) on $branch"
     } elseif ($commitCount -eq 1) {
-        Assert-Fail "git history has 1 commit (cleanup commit didn't land — Phase 2 step 11 incomplete)"
+        Assert-Fail "git history has 1 commit (cleanup commit didn't land -- Phase 2 step 11 incomplete)"
     } elseif ($commitCount -eq 0) {
         Assert-Fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
     } else {
@@ -115,14 +115,14 @@ if (Test-Path .git) {
     # asked the agent to do the GitHub bootstrap.
     # `git remote` returns one remote per line. PowerShell's native command
     # capture turns a single-line result into a bare string (no trailing
-    # newline) — and `Measure-Object -Line` on that returns 0, not 1, because
+    # newline) -- and `Measure-Object -Line` on that returns 0, not 1, because
     # it counts newline-terminated lines. Split + filter empties so the count
     # is right whether there are 0, 1, or many remotes.
     $remotes = git -C $RepoDir remote 2>$null
     $remoteList = @($remotes -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     $remoteCount = $remoteList.Count
     if ($env:ELNORA_HANDOFF_REPO_NAME) {
-        # PAT path — expect exactly one remote 'origin' pointing at the
+        # PAT path -- expect exactly one remote 'origin' pointing at the
         # CI-named repo, with HEAD == origin/main and visibility = PRIVATE.
         if ($remoteCount -eq 1 -and $remoteList[0] -eq "origin") {
             Assert-Ok "exactly one remote 'origin' configured"
@@ -153,9 +153,9 @@ if (Test-Path .git) {
             Assert-Fail "expected GitHub repo $env:ELNORA_HANDOFF_REPO_NAME visibility=PRIVATE, got '$shown'"
         }
     } else {
-        # Legacy headless path — no PAT provisioned, GitHub bootstrap skipped.
+        # Legacy headless path -- no PAT provisioned, GitHub bootstrap skipped.
         if ($remoteCount -eq 0) {
-            Assert-Ok "no git remotes configured (expected — GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
+            Assert-Ok "no git remotes configured (expected -- GitHub bootstrap was skipped without ELNORA_HANDOFF_REPO_NAME)"
         } else {
             Assert-Fail "expected 0 remotes (no PAT provisioned), found ${remoteCount}: $($remoteList -join ' ')"
         }
@@ -167,7 +167,7 @@ if (Test-Path .git) {
 
 # --- Knowledge base config ---
 # The doc tells the agent to ALWAYS write `.claude/knowledge-base.local.md`,
-# even when no vault was found — leaving `vault_path:` as the
+# even when no vault was found -- leaving `vault_path:` as the
 # `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder. So the file's existence is
 # always required; the placeholder-replaced check only fires when the test
 # fixture actually staged a vault (signalled by KB_STAGED=1).
@@ -216,12 +216,12 @@ $cleanupFiles = @(
 $cleanupOk = $true
 foreach ($f in $cleanupFiles) {
     if (Test-Path -LiteralPath $f) {
-        Assert-Fail "step 11 cleanup did not remove '$f' — still present after handoff"
+        Assert-Fail "step 11 cleanup did not remove '$f' -- still present after handoff"
         $cleanupOk = $false
     }
 }
 if (Test-Path -LiteralPath ".vscode") {
-    Assert-Fail "step 11 cleanup did not remove '.vscode/' — still present after handoff"
+    Assert-Fail "step 11 cleanup did not remove '.vscode/' -- still present after handoff"
     $cleanupOk = $false
 }
 if ($cleanupOk) {
@@ -262,7 +262,7 @@ if ($hardeningPath) {
         Assert-Ok "$hardeningPath has no python open() against .claude/ paths"
     }
 } else {
-    Write-Host "  - INSTALL_FOR_AGENTS.md not present in $RepoDir or via ELNORA_KIT_SOURCE_DIR — hardening regression check skipped" -ForegroundColor Yellow
+    Write-Host "  - INSTALL_FOR_AGENTS.md not present in $RepoDir or via ELNORA_KIT_SOURCE_DIR -- hardening regression check skipped" -ForegroundColor Yellow
 }
 
 # --- HANDOFF_COMPLETE marker in transcript ---
@@ -278,7 +278,7 @@ if (Test-Path $Transcript) {
         Assert-Fail "transcript does not contain HANDOFF_COMPLETE marker"
     }
     # Match the auth/verification commands from INSTALL_FOR_AGENTS.md (steps 4-7).
-    # `elnora --version` alone is not enough — it doesn't prove auth works.
+    # `elnora --version` alone is not enough -- it doesn't prove auth works.
     if ($transcriptText -match 'elnora\s+(whoami|doctor|auth\s+(login|status))') {
         Assert-Ok "transcript shows Claude invoked an elnora auth/verification command"
     } else {

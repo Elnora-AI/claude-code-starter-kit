@@ -39,7 +39,7 @@ else
     if curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 300 "$TARBALL_URL" | tar xz -C "$TMP_DIR"; then
         mkdir -p "$(dirname "$TARGET_DIR")"
         # GitHub's tarball extracts to "<repo>-<branch>". Verify that path
-        # exists before moving — protects against branch names that contain
+        # exists before moving -- protects against branch names that contain
         # slashes (GitHub rewrites '/' to '-' inside the archive but $BRANCH
         # would still carry the slash) and against silent tar failures
         # mid-pipe that don't trip curl's exit code. install.ps1 already
@@ -65,7 +65,7 @@ cd "$TARGET_DIR"
 
 # On fresh extract, write a marker file recording the SHA256 of
 # INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-mac.sh
-# verifies this hash before handing off to claude with bypassPermissions —
+# verifies this hash before handing off to claude with bypassPermissions --
 # if a third party tampers with the doc between extract and setup, the
 # verify step trips and the handoff aborts. This is the trust anchor for
 # the headless Phase 2 flow.

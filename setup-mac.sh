@@ -23,7 +23,7 @@ set -u
 # Self-defense: ensure user-local bin is on PATH from line 1.
 # This makes the script work even when re-run from a terminal that was
 # opened before any prior install (where ~/.local/bin isn't yet in the
-# inherited PATH). Idempotent — no harm if the dir doesn't exist yet.
+# inherited PATH). Idempotent -- no harm if the dir doesn't exist yet.
 export PATH="$HOME/.local/bin:$PATH"
 
 # Default-on logging. Tee everything (stdout + stderr) to a log file in $HOME.
@@ -34,7 +34,7 @@ LOG_FILE="$HOME/claude-starter-install.log"
 # (typically 0644), so without this the log lands world-readable and any
 # other user on a shared Mac can read it. The script later prompts for an
 # Elnora API key and uses `read -rs` specifically to keep it out of this
-# log — locking the file down belt-and-suspenders.
+# log -- locking the file down belt-and-suspenders.
 ( umask 077 && : > "$LOG_FILE" ) || true
 chmod 600 "$LOG_FILE" 2>/dev/null || true
 exec > >(tee "$LOG_FILE") 2>&1
@@ -210,7 +210,7 @@ EOF
 # Stream handling: we merge stderr into stdout, then tee the merged stream
 # both to the capture file AND to fd 3 (the original stdout, i.e. the
 # terminal). That way the failure box quotes whatever the command actually
-# printed — important because brew, npm, curl, etc. emit their error
+# printed -- important because brew, npm, curl, etc. emit their error
 # messages on stdout, not stderr, so capturing stderr alone left the box
 # empty for the most common failures. PIPESTATUS[0] preserves the command's
 # exit code through the pipe (otherwise we'd get tee's exit code, always 0).
@@ -218,7 +218,7 @@ EOF
 # WARNING for future maintainers: the FAILURE box echoes "$*" verbatim.
 # Today no caller passes a secret as a positional arg (the API key path
 # uses `read -rs` and stays in a local var). If you ever route a secret
-# through here — e.g. an OAuth token in argv — the failure box will leak
+# through here -- e.g. an OAuth token in argv -- the failure box will leak
 # it to both the terminal and $LOG_FILE. Pre-redact or wrap such commands
 # in a small helper that prints a sanitized command line instead.
 run_step() {
@@ -405,7 +405,7 @@ if ! command -v brew &> /dev/null; then
     echo "  password. Password characters won't show as you type - that's normal."
     # Fetch the installer first so we can detect curl failures explicitly.
     # The previous form `bash -c "$(curl -fsSL ...)"` silently no-op'd when
-    # curl failed (DNS, 404, network) — `$(curl ...)` expanded to empty,
+    # curl failed (DNS, 404, network) -- `$(curl ...)` expanded to empty,
     # `bash -c ""` exited 0, and we'd hit the success branch with no brew.
     # We don't pipe through a second `bash` (Claude/Elnora pattern) because
     # Homebrew's installer is interactive: it needs to prompt for a sudo
@@ -425,7 +425,7 @@ if ! command -v brew &> /dev/null; then
         FAILED_STEPS+=("Homebrew (curl exit $brew_curl_code)")
         brew_installer_script=""
     fi
-    # Skip the installer run entirely if curl already failed above — we
+    # Skip the installer run entirely if curl already failed above -- we
     # already printed a FAILURE box and recorded the step. Otherwise run
     # the installer and branch on its exit.
     brew_installer_ran=0
@@ -521,7 +521,7 @@ if ! $node_major_ok; then
     # node@22` runs against an image that already has a different node@N
     # linked, brew emits a yellow `##[warning]node@22 was installed but
     # not linked because node@<other> is already linked` annotation that
-    # the next `brew link --force --overwrite` resolves anyway — but the
+    # the next `brew link --force --overwrite` resolves anyway -- but the
     # warning surfaces in the GH Actions UI as run-summary noise. Pre-
     # unlink whatever node is linked before installing so the warning
     # never fires. Real-user machines almost never hit this path
@@ -617,7 +617,7 @@ fi
 
 # --- [7/10] VS Code ---
 if [ "${ELNORA_SKIP_OPTIONAL_INSTALLS:-}" = "1" ]; then
-    # CI/test escape hatch — mirrors setup-windows.ps1. Used by
+    # CI/test escape hatch -- mirrors setup-windows.ps1. Used by
     # handoff-e2e.yml and bootstrap-e2e.yml so the test runner doesn't burn
     # ~14s/run installing optional editors that the test never exercises.
     echo "[7/10] VS Code: ELNORA_SKIP_OPTIONAL_INSTALLS=1 - skipping for non-interactive run."
@@ -1231,7 +1231,7 @@ if command -v claude >/dev/null 2>&1; then
         # that reaches the script's stdout also lands in
         # ~/claude-starter-install.log. Without /dev/null the JSONL stream
         # passes through `tee` to the script's stdout AND gets appended to
-        # the install log — bloating it from ~3KB to ~180KB and embedding
+        # the install log -- bloating it from ~3KB to ~180KB and embedding
         # the agent's own conversation (including the literal text
         # "FAILED:" inside INSTALL_FOR_AGENTS.md) where the next agent's
         # `grep FAILED:` will hit it as false positives. Send JSONL to
@@ -1258,7 +1258,7 @@ if command -v claude >/dev/null 2>&1; then
     #   2. `code` CLI on PATH and the user hasn't opted out: write a one-shot
     #      sentinel containing the handoff prompt, open VS Code at this repo,
     #      and exit. VS Code's runOn:folderOpen task picks up the sentinel and
-    #      hands off to claude inside the integrated terminal — so users get
+    #      hands off to claude inside the integrated terminal -- so users get
     #      the file tree, source control panel, and IDE around their session
     #      instead of a bare Terminal.app. ELNORA_SKIP_VSCODE_HANDOFF=1 is
     #      the user-facing escape hatch.
@@ -1278,7 +1278,7 @@ if command -v claude >/dev/null 2>&1; then
         VSCODE_DIR="$SCRIPT_DIR/.vscode"
         SENTINEL="$VSCODE_DIR/.handoff-pending"
         if [ -d "$VSCODE_DIR" ] && [ -f "$VSCODE_DIR/run-handoff.sh" ]; then
-            # The sentinel's content IS the prompt — keeps a single source of
+            # The sentinel's content IS the prompt -- keeps a single source of
             # truth ($HANDOFF_PROMPT in this script). The helper reads, deletes,
             # then exec's claude. Pre-delete on the helper side guarantees the
             # task is one-shot even if claude crashes.

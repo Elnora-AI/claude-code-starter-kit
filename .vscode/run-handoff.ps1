@@ -1,10 +1,14 @@
 # ============================================================
-# Phase 1 → Phase 2 handoff helper (Windows)
+# Phase 1 -> Phase 2 handoff helper (Windows)
 # ============================================================
 # Fired by .vscode/tasks.json on folderOpen. Consumes the one-shot sentinel
-# .vscode\.handoff-pending (whose contents ARE the handoff prompt — single
+# .vscode\.handoff-pending (whose contents ARE the handoff prompt -- single
 # source of truth lives in setup-windows.ps1). On subsequent opens (sentinel
 # absent), exits silently so the task is a no-op.
+#
+# Stay pure ASCII. Windows PowerShell 5.1 (the default `powershell.exe` the
+# VS Code task invokes) reads BOM-less .ps1 files as ANSI/CP-1252; UTF-8
+# em-dashes and arrows get mangled into bytes that break string parsing.
 
 $ErrorActionPreference = "Stop"
 
@@ -42,7 +46,7 @@ if ((Test-Path $claudeBin) -and (($env:Path -split ';') -notcontains $claudeBin)
 
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
     Write-Host "[!] 'claude' command not found on PATH inside VS Code's terminal." -ForegroundColor Red
-    Write-Host "    Quit VS Code fully (File -> Exit) and reopen — the integrated" -ForegroundColor Red
+    Write-Host "    Quit VS Code fully (File -> Exit) and reopen -- the integrated" -ForegroundColor Red
     Write-Host "    terminal caches PATH at app launch. If that doesn't help," -ForegroundColor Red
     Write-Host "    re-run setup: .\setup-windows.ps1" -ForegroundColor Red
     exit 127

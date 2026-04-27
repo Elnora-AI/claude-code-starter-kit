@@ -102,7 +102,7 @@ Write-Host "  Done." -ForegroundColor Gray
 
 # On fresh extract, write a marker file recording the SHA256 of
 # INSTALL_FOR_AGENTS.md as it was extracted from GitHub. setup-windows.ps1
-# verifies this hash before handing off to claude with bypassPermissions —
+# verifies this hash before handing off to claude with bypassPermissions --
 # if a third party tampers with the doc between extract and setup, the
 # verify step trips and the handoff aborts. This is the trust anchor for
 # the headless Phase 2 flow. Only written on FRESH extract (re-bless on
