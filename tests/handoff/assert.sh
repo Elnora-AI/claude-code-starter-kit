@@ -71,10 +71,18 @@ echo "[git]"
 if [ -d .git ]; then
     ok ".git directory exists"
     commit_count=$(git -C "$REPO_DIR" log --oneline 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$commit_count" -ge 1 ]; then
-        ok "git history has $commit_count commit(s) on $(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || echo '?')"
-    else
+    # Expected end-state is exactly 2 commits: "Initial commit" + the step 11
+    # cleanup commit ("chore: remove one-shot install scaffolding"). Anything
+    # less means cleanup didn't land; anything more means an unexpected extra
+    # commit slipped in.
+    if [ "$commit_count" -eq 2 ]; then
+        ok "git history has $commit_count commits (initial + cleanup) on $(git -C "$REPO_DIR" symbolic-ref --short HEAD 2>/dev/null || echo '?')"
+    elif [ "$commit_count" -eq 1 ]; then
+        fail "git history has 1 commit (cleanup commit didn't land — Phase 2 step 11 incomplete)"
+    elif [ "$commit_count" -eq 0 ]; then
         fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
+    else
+        fail "git history has $commit_count commits (expected exactly 2: initial + cleanup)"
     fi
     # Two branches based on whether the workflow provisioned a PAT and
     # asked the agent to do the GitHub bootstrap.
@@ -154,28 +162,62 @@ else
     ok "CLAUDE.md '### First-run setup' block was removed"
 fi
 
-# --- INSTALL_FOR_AGENTS.md hardening (no sensitive-paths bypass coaching) ---
+# --- Step 11 cleanup ---
+# Phase 2 step 11 removes the one-shot install scaffolding (bootstrap
+# downloaders, Phase 1 installers, this Phase 2 doc, the recovery doc, the
+# integrity marker, and the .vscode/ handoff helpers). The expected
+# end-state for the user is a clean repo containing only what they need.
+echo ""
+echo "[step 11 cleanup]"
+cleanup_files="install.sh install.ps1 setup-mac.sh setup-windows.ps1 INSTALL_FOR_AGENTS.md RECOVERY.md .elnora-starter-kit-marker"
+cleanup_ok=1
+for f in $cleanup_files; do
+    if [ -e "$f" ]; then
+        fail "step 11 cleanup did not remove '$f' — still present after handoff"
+        cleanup_ok=0
+    fi
+done
+if [ -d .vscode ]; then
+    fail "step 11 cleanup did not remove '.vscode/' — still present after handoff"
+    cleanup_ok=0
+fi
+if [ "$cleanup_ok" -eq 1 ]; then
+    ok "all one-shot scaffolding removed (install/setup scripts, INSTALL_FOR_AGENTS.md, RECOVERY.md, .vscode/, marker)"
+fi
+
+# --- INSTALL_FOR_AGENTS.md hardening (regression check, source-file based) ---
 # Regression check: PR1 of the security plan removed the python3 -c bypass
 # instructions that gave agents a generic file-write primitive against
-# .claude/ paths. If anyone reintroduces them, this fires. The doc still
-# mentions `python3 -c` inside backticks ("do **not** use python3 -c …")
-# which is fine; we only fail on actual code-block invocations and on
-# python file-opens against .claude/ paths.
+# .claude/ paths. The doc still mentions `python3 -c` inside backticks
+# ("do **not** use python3 -c …") which is fine; we only fail on actual
+# code-block invocations and on python file-opens against .claude/ paths.
+#
+# After step 11 cleanup the post-handoff repo no longer contains
+# INSTALL_FOR_AGENTS.md, so we read it from the source checkout via
+# ELNORA_KIT_SOURCE_DIR (the workflow exports the path of the kit
+# checkout that fed the handoff). Falls back to PWD if unset (legacy
+# call sites, or local dev runs that pre-date cleanup).
 echo ""
 echo "[INSTALL_FOR_AGENTS.md hardening]"
-if [ -f INSTALL_FOR_AGENTS.md ]; then
-    if grep -nE "^[[:space:]]+python3? -c" INSTALL_FOR_AGENTS.md >/dev/null 2>&1; then
-        fail "INSTALL_FOR_AGENTS.md contains an indented 'python3 -c' invocation (looks like coaching)"
+hardening_path=""
+if [ -n "${ELNORA_KIT_SOURCE_DIR:-}" ] && [ -f "$ELNORA_KIT_SOURCE_DIR/INSTALL_FOR_AGENTS.md" ]; then
+    hardening_path="$ELNORA_KIT_SOURCE_DIR/INSTALL_FOR_AGENTS.md"
+elif [ -f INSTALL_FOR_AGENTS.md ]; then
+    hardening_path="INSTALL_FOR_AGENTS.md"
+fi
+if [ -n "$hardening_path" ]; then
+    if grep -nE "^[[:space:]]+python3? -c" "$hardening_path" >/dev/null 2>&1; then
+        fail "$hardening_path contains an indented 'python3 -c' invocation (looks like coaching)"
     else
-        ok "INSTALL_FOR_AGENTS.md has no indented python3 -c invocations"
+        ok "$hardening_path has no indented python3 -c invocations"
     fi
-    if grep -nE "open\(['\"][^'\"]*\.claude/" INSTALL_FOR_AGENTS.md >/dev/null 2>&1; then
-        fail "INSTALL_FOR_AGENTS.md contains a python open() call against .claude/ (sensitive-paths bypass)"
+    if grep -nE "open\(['\"][^'\"]*\.claude/" "$hardening_path" >/dev/null 2>&1; then
+        fail "$hardening_path contains a python open() call against .claude/ (sensitive-paths bypass)"
     else
-        ok "INSTALL_FOR_AGENTS.md has no python open() against .claude/ paths"
+        ok "$hardening_path has no python open() against .claude/ paths"
     fi
 else
-    fail "INSTALL_FOR_AGENTS.md not found in $REPO_DIR"
+    echo "  - INSTALL_FOR_AGENTS.md not present in $REPO_DIR or via ELNORA_KIT_SOURCE_DIR — hardening regression check skipped"
 fi
 
 # --- HANDOFF_COMPLETE marker in transcript ---

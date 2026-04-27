@@ -85,15 +85,18 @@ mode, follow these adjustments:
     file from a `Bash` call (gives an agent a generic file-write
     primitive that bypasses tool-level guards). The `Edit` tool is the
     right interface — it's auditable in the transcript.
-  - **Commit shape — fold into the initial commit, don't add a second.**
+  - **Commit shape — initial commit + final cleanup commit, exactly two.**
     The pre-staged `.claude/knowledge-base.local.md` and the CLAUDE.md
     self-clean above both land in the working tree **before** step 6's
     `git add . && git commit -m "Initial commit"` runs, so they're
-    naturally included in the initial commit — no separate "cleanup"
-    commit needed. If you somehow run the self-clean *after* step 6
-    already committed, fold the change in with `git add CLAUDE.md &&
-    git commit --amend --no-edit` rather than adding a second commit.
-    The initial state should be one clean commit.
+    naturally included in the initial commit — do **not** add a second
+    commit for either of them. If you somehow run the self-clean *after*
+    step 6 already committed, fold the change in with `git add CLAUDE.md
+    && git commit --amend --no-edit`. The initial commit should be one
+    clean commit. Step 11's scaffolding cleanup then adds **one** more
+    commit ("chore: remove one-shot install scaffolding"), bringing the
+    final count to exactly two. Anything other than two commits is a bug
+    — surface it.
 - **Step 6 (GitHub bootstrap):** branches on whether
   `ELNORA_HANDOFF_GH_TOKEN` is set in the environment.
   - **If `ELNORA_HANDOFF_GH_TOKEN` is set** (CI provisions a PAT for the
@@ -150,25 +153,36 @@ mode, follow these adjustments:
   1. `elnora auth status` reports `authenticated: true` (the API key is
      persisted to `~/.elnora/profiles.toml`, so future shells stay
      authed).
-  2. `.git/` exists and `git log --oneline | wc -l` is `>= 1` (the initial
-     commit landed locally).
+  2. `.git/` exists and `git log --oneline | wc -l` is `2` exactly: the
+     initial commit + the step 11 cleanup commit. `1` means cleanup
+     didn't land; anything higher means an unexpected extra commit
+     slipped in.
   3. Git remote state depends on which branch of step 6 ran:
      - **Interactive mode** OR **headless mode with
        `ELNORA_HANDOFF_GH_TOKEN` set:** `git remote -v` shows exactly
        one remote, `origin`, pointing at
        `https://github.com/<gh-username>/<repo>.git`;
-       `git rev-parse HEAD` equals `git rev-parse origin/main`; and
-       `gh repo view --json visibility --jq .visibility` returns
-       `"PRIVATE"`. (In headless CI, `<repo>` is
-       `$ELNORA_HANDOFF_REPO_NAME`.)
+       `git rev-parse HEAD` equals `git rev-parse origin/main` (the
+       cleanup commit pushed successfully); and `gh repo view --json
+       visibility --jq .visibility` returns `"PRIVATE"`. (In headless
+       CI, `<repo>` is `$ELNORA_HANDOFF_REPO_NAME`.)
      - **Headless mode without `ELNORA_HANDOFF_GH_TOKEN`:**
        `git remote -v` is empty — GitHub bootstrap was skipped on
-       purpose.
+       purpose. The cleanup commit still lands locally; commit count
+       is still `2`.
   4. `.claude/knowledge-base.local.md` exists; its `vault_path:` value is
      a real directory (not the `<ABSOLUTE_PATH_TO_YOUR_VAULT>` placeholder).
   5. `CLAUDE.md` no longer contains the `### First-run setup` heading or
      its body (`grep -c '### First-run setup' CLAUDE.md` should print `0`).
-  6. `elnora whoami` and `elnora doctor` completed without
+  6. Step 11 cleanup ran: none of `install.sh`, `install.ps1`,
+     `setup-mac.sh`, `setup-windows.ps1`, `INSTALL_FOR_AGENTS.md`,
+     `RECOVERY.md`, `.elnora-starter-kit-marker` exist on disk; `.vscode/`
+     directory is gone. Run `for f in install.sh install.ps1 setup-mac.sh
+     setup-windows.ps1 INSTALL_FOR_AGENTS.md RECOVERY.md
+     .elnora-starter-kit-marker; do [ ! -e "$f" ] || echo "STILL: $f";
+     done; [ ! -d .vscode ] || echo "STILL: .vscode/"` — output must be
+     empty.
+  7. `elnora whoami` and `elnora doctor` completed without
      authentication errors. Non-auth `elnora doctor` failures (e.g. an
      `elnora setup claude` plugin-config check that's unrelated to the
      API key) are NOT blocking — but you must record the failing check
@@ -760,7 +774,195 @@ can see what Elnora does? Just tell me what you're trying to do — e.g.
 If they say yes, run the appropriate `elnora` command (or use the elnora MCP
 tools), show the output, and explain what they're looking at.
 
-### 11. Done
+### 11. Final cleanup — strip one-shot install scaffolding
+
+Phase 2 is functionally done. What's left is removing the install-time files
+the user no longer needs so their first repo is clean. **Do this only after
+step 10 has completed** (or the user declined step 10 — either way, all
+earlier steps must be past tense). If any earlier step is still incomplete,
+finish it first and come back here.
+
+> **Why this step exists.** The repo currently still contains the
+> bootstrap downloaders (`install.sh`/`install.ps1`), the Phase 1 installer
+> (`setup-mac.sh`/`setup-windows.ps1`), this very doc
+> (`INSTALL_FOR_AGENTS.md`), the install-failure triage doc (`RECOVERY.md`),
+> the integrity marker (`.elnora-starter-kit-marker`), and the VS Code
+> handoff helpers (`.vscode/`). All of those were one-shot — they served
+> their purpose and from here they are clutter in what's supposed to be
+> the user's clean starter repo.
+>
+> **Last-use audit (verified before placing this step):** none of the files
+> below are referenced by any later step in this doc. `setup-windows.ps1`'s
+> last reference was step 9e (Chrome troubleshooting), `RECOVERY.md`'s
+> last live-triage reference was step 7. All are now safely deletable.
+
+#### 11a. Tell the user what you're about to do
+
+Read this in plain language:
+
+> "Setup is complete. I'm going to do one last cleanup pass — removing
+> the install scripts, this setup doc, and a few related one-shot files
+> so your repo only contains what *you* need going forward. Then I'll
+> commit and push so your GitHub repo matches. Takes ~5 seconds."
+
+Do **not** ask for permission — this is the documented final step of the
+handoff, not an opt-in. Just announce and proceed.
+
+#### 11b. Delete the one-shot files
+
+Run from the repo root:
+
+```
+rm -f install.sh install.ps1 \
+      setup-mac.sh setup-windows.ps1 \
+      INSTALL_FOR_AGENTS.md RECOVERY.md \
+      .elnora-starter-kit-marker
+rm -rf .vscode
+```
+
+`rm -f` so missing files (e.g. `install.ps1` on macOS, `setup-mac.sh` on
+Windows) don't error — the kit ships both OS variants in the tarball even
+though only one runs locally. `rm -rf .vscode` removes the entire handoff
+helper directory, including `tasks.json` (which has `runOn: folderOpen`
+and would error on next VS Code open if its backing `run-handoff.{sh,ps1}`
+were missing).
+
+> **Why this is safe to do mid-Phase-2.** `setup-mac.sh` `exec`'d into
+> `claude`, so its bash process was replaced — there's no parent process
+> waiting on the file. In headless mode, `claude -p` is a child of
+> `setup-mac.sh` but the script reads no further files after the
+> `claude -p` line. On both platforms the script content is loaded into
+> memory at start; deleting the file mid-run is fine.
+
+**Gate:** verify each file is gone:
+
+```
+for f in install.sh install.ps1 setup-mac.sh setup-windows.ps1 \
+         INSTALL_FOR_AGENTS.md RECOVERY.md \
+         .elnora-starter-kit-marker; do
+    [ ! -e "$f" ] || echo "STILL PRESENT: $f"
+done
+[ ! -d .vscode ] || echo "STILL PRESENT: .vscode/"
+```
+
+Output should be empty. Anything printed is a problem — surface it and stop.
+
+#### 11c. Fix the now-broken references in surviving docs
+
+Two surviving files have markdown links that pointed at files we just
+deleted. Fix them with the `Edit` tool (do **not** use `python3 -c`,
+heredocs, or sed — `Edit` is the auditable interface).
+
+**`CLAUDE.md`** — remove the top admonition that pointed at
+`INSTALL_FOR_AGENTS.md` and `RECOVERY.md`. Use `Edit` with:
+
+- `old_string`: the entire 4-line blockquote, exactly:
+
+  ```
+  > **For agents handing off from the install script**: see
+  > [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md) for the Phase 2 setup
+  > sequence (verify versions, collect Elnora API key, smoke test, knowledge
+  > base). If something looks half-done, see [`RECOVERY.md`](RECOVERY.md).
+  ```
+
+- `new_string`: empty string `""`.
+
+If the admonition isn't found verbatim (someone may have edited it), stop
+and surface the discrepancy — do not invent a workaround.
+
+**`docs/getting-started.md`** — line ~130 references `RECOVERY.md`. Use
+`Edit` with:
+
+- `old_string`: ``If any step fails, see [`../RECOVERY.md`](../RECOVERY.md) → "GitHub auth``
+  (and continue to capture whatever sentence/paragraph that line begins —
+  read the file first to see the exact surrounding text).
+- `new_string`: rewrite to drop the `RECOVERY.md` reference. Replace the
+  triage pointer with: `If any step fails, ask Claude to help debug it.`
+
+If `docs/getting-started.md` doesn't contain that pattern (file was
+restructured), skip — don't invent a fix.
+
+**`README.md`** — replace wholesale with a minimal user-facing version.
+Use the `Write` tool with `file_path` = `README.md` and exactly this
+content (preserve all newlines and leading hashes verbatim):
+
+````markdown
+# My Agent Workspace
+
+A private, Elnora-powered agent workspace built from the
+[Elnora Starter Kit](https://github.com/Elnora-AI/elnora-starter-kit).
+The install scaffolding has been trimmed; this repo now contains only
+what's useful for day-to-day work.
+
+## What's in here
+
+- `CLAUDE.md` — project instructions Claude reads at the start of every
+  conversation. Customize freely as your workflow evolves.
+- `.claude/` — Claude Code settings, plugins, and per-user knowledge-base
+  config (`knowledge-base.local.md` is gitignored).
+- `.mcp.json` — MCP server configuration (Elnora, Chrome DevTools).
+- `docs/` — daily-workflow guide and Chrome DevTools setup notes.
+- `TOOLS.md` — installed plugins and MCP servers.
+- `marketplace-plugins.md` — recommended Claude Code plugins.
+
+## Daily use
+
+1. Open this folder in your editor (or `cd` here in a terminal).
+2. Start Claude Code with `claude`.
+3. Ask Claude to do work — generate protocols, write notes, plan
+   experiments.
+4. Commit and push your changes (`git add -A && git commit && git push`)
+   to keep your work backed up to GitHub.
+
+## Setting up a new machine
+
+Re-run the upstream installer — your existing GitHub repo is yours and
+stays where it is:
+
+```bash
+# macOS
+curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
+
+# Windows
+irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
+```
+
+## License
+
+MIT (inherited from the starter kit).
+````
+
+#### 11d. Commit and push the cleanup
+
+```
+git add -A
+git commit -q -m "chore: remove one-shot install scaffolding"
+git push origin main
+```
+
+This produces a second commit on top of "Initial commit". Your final
+history is two commits — one capturing the as-shipped state, one
+removing what wasn't needed for the user's actual work.
+
+**Gate** — all must pass:
+- `git log --oneline | wc -l` returns `2` (interactive mode and headless
+  mode with `ELNORA_HANDOFF_GH_TOKEN`); `1` is **not** acceptable here
+  because the cleanup commit didn't land.
+- `git rev-parse HEAD` equals `git rev-parse origin/main` (cleanup commit
+  reached GitHub). In headless mode without `ELNORA_HANDOFF_GH_TOKEN`
+  there is no remote — skip this sub-gate.
+
+If `git push` fails, the local cleanup commit is still good — surface the
+push error and tell the user to retry with `git push origin main`. Do
+**not** roll back the deletions.
+
+> **Headless mode (`ELNORA_HANDOFF_MODE=headless`):** run 11b–11d as
+> written, including the `Edit`/`Write` calls. The user-facing
+> announcement in 11a is unnecessary (no human to talk to) — skip the
+> announcement, do the actions. The cleanup commit is part of the
+> documented expected end state and the test fixture asserts on it.
+
+### 12. Done
 
 Tell the user:
 
@@ -776,4 +978,6 @@ Tell the user:
 - Next: try asking Claude to do something — generate another protocol, write
   notes, plan an experiment.
 
-If anything in this flow failed, point them at `RECOVERY.md`.
+If anything went wrong during setup, ask Claude in this same window for help
+debugging — they can read the install log at `~/claude-starter-install.log`
+(macOS) / `%USERPROFILE%\claude-starter-install.log` (Windows).

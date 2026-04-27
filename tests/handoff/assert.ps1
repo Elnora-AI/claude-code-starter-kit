@@ -96,12 +96,20 @@ Write-Host "[git]"
 if (Test-Path .git) {
     Assert-Ok ".git directory exists"
     $commitCount = (git -C $RepoDir log --oneline 2>$null | Measure-Object -Line).Lines
-    if ($commitCount -ge 1) {
-        $branch = git -C $RepoDir symbolic-ref --short HEAD 2>$null
-        if (-not $branch) { $branch = "?" }
-        Assert-Ok "git history has $commitCount commit(s) on $branch"
-    } else {
+    $branch = git -C $RepoDir symbolic-ref --short HEAD 2>$null
+    if (-not $branch) { $branch = "?" }
+    # Expected end-state is exactly 2 commits: "Initial commit" + the step 11
+    # cleanup commit ("chore: remove one-shot install scaffolding"). Anything
+    # less means cleanup didn't land; anything more means an unexpected extra
+    # commit slipped in.
+    if ($commitCount -eq 2) {
+        Assert-Ok "git history has 2 commits (initial + cleanup) on $branch"
+    } elseif ($commitCount -eq 1) {
+        Assert-Fail "git history has 1 commit (cleanup commit didn't land — Phase 2 step 11 incomplete)"
+    } elseif ($commitCount -eq 0) {
         Assert-Fail "git history is empty (Claude did not run 'git commit' for the initial commit)"
+    } else {
+        Assert-Fail "git history has $commitCount commits (expected exactly 2: initial + cleanup)"
     }
     # Two branches based on whether the workflow provisioned a PAT and
     # asked the agent to do the GitHub bootstrap.
@@ -192,31 +200,69 @@ if ($claudeMd -match '### First-run setup') {
     Assert-Ok "CLAUDE.md '### First-run setup' block was removed"
 }
 
-# --- INSTALL_FOR_AGENTS.md hardening (no sensitive-paths bypass coaching) ---
+# --- Step 11 cleanup ---
+# Phase 2 step 11 removes the one-shot install scaffolding (bootstrap
+# downloaders, Phase 1 installers, this Phase 2 doc, the recovery doc, the
+# integrity marker, and the .vscode/ handoff helpers). The expected
+# end-state for the user is a clean repo containing only what they need.
+Write-Host ""
+Write-Host "[step 11 cleanup]"
+$cleanupFiles = @(
+    "install.sh", "install.ps1",
+    "setup-mac.sh", "setup-windows.ps1",
+    "INSTALL_FOR_AGENTS.md", "RECOVERY.md",
+    ".elnora-starter-kit-marker"
+)
+$cleanupOk = $true
+foreach ($f in $cleanupFiles) {
+    if (Test-Path -LiteralPath $f) {
+        Assert-Fail "step 11 cleanup did not remove '$f' — still present after handoff"
+        $cleanupOk = $false
+    }
+}
+if (Test-Path -LiteralPath ".vscode") {
+    Assert-Fail "step 11 cleanup did not remove '.vscode/' — still present after handoff"
+    $cleanupOk = $false
+}
+if ($cleanupOk) {
+    Assert-Ok "all one-shot scaffolding removed (install/setup scripts, INSTALL_FOR_AGENTS.md, RECOVERY.md, .vscode/, marker)"
+}
+
+# --- INSTALL_FOR_AGENTS.md hardening (regression check, source-file based) ---
 # Regression check: PR1 of the security plan removed the python3 -c bypass
 # instructions that gave agents a generic file-write primitive against
 # .claude/ paths. The doc still mentions `python3 -c` inside backticks
 # ("do not use python3 -c ...") which is fine; we only fail on actual
 # code-block invocations and on python file-opens against .claude/ paths.
+#
+# After step 11 cleanup the post-handoff repo no longer contains
+# INSTALL_FOR_AGENTS.md, so we read it from the source checkout via
+# ELNORA_KIT_SOURCE_DIR (the workflow exports the path of the kit
+# checkout that fed the handoff). Falls back to RepoDir if unset.
 Write-Host ""
 Write-Host "[INSTALL_FOR_AGENTS.md hardening]"
-$installForAgents = "INSTALL_FOR_AGENTS.md"
-if (Test-Path -LiteralPath $installForAgents) {
-    $docLines = Get-Content -LiteralPath $installForAgents
+$hardeningPath = $null
+if ($env:ELNORA_KIT_SOURCE_DIR -and (Test-Path -LiteralPath (Join-Path $env:ELNORA_KIT_SOURCE_DIR "INSTALL_FOR_AGENTS.md"))) {
+    $hardeningPath = Join-Path $env:ELNORA_KIT_SOURCE_DIR "INSTALL_FOR_AGENTS.md"
+} elseif (Test-Path -LiteralPath "INSTALL_FOR_AGENTS.md") {
+    $hardeningPath = "INSTALL_FOR_AGENTS.md"
+}
+if ($hardeningPath) {
+    $docLines = Get-Content -LiteralPath $hardeningPath
     $indentedPython = $docLines | Where-Object { $_ -match '^\s+python3? -c' }
     if ($indentedPython) {
-        Assert-Fail "$installForAgents contains an indented 'python3 -c' invocation (looks like coaching)"
+        Assert-Fail "$hardeningPath contains an indented 'python3 -c' invocation (looks like coaching)"
     } else {
-        Assert-Ok "$installForAgents has no indented python3 -c invocations"
+        Assert-Ok "$hardeningPath has no indented python3 -c invocations"
     }
     $sensitivePathOpen = $docLines | Where-Object { $_ -match "open\(['""][^'""]*\.claude/" }
     if ($sensitivePathOpen) {
-        Assert-Fail "$installForAgents contains a python open() call against .claude/ (sensitive-paths bypass)"
+        Assert-Fail "$hardeningPath contains a python open() call against .claude/ (sensitive-paths bypass)"
     } else {
-        Assert-Ok "$installForAgents has no python open() against .claude/ paths"
+        Assert-Ok "$hardeningPath has no python open() against .claude/ paths"
     }
 } else {
-    Assert-Fail "$installForAgents not found in $RepoDir"
+    Write-Host "  - INSTALL_FOR_AGENTS.md not present in $RepoDir or via ELNORA_KIT_SOURCE_DIR — hardening regression check skipped" -ForegroundColor Yellow
 }
 
 # --- HANDOFF_COMPLETE marker in transcript ---
