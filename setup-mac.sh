@@ -1231,6 +1231,75 @@ if command -v claude >/dev/null 2>&1; then
         exit "$rc"
     fi
 
+    # Interactive handoff. Three branches by environment:
+    #
+    #   1. Already inside VS Code's integrated terminal ($TERM_PROGRAM=vscode):
+    #      the user has the IDE on screen already, so just exec claude in
+    #      this shell. No window-launching dance needed.
+    #
+    #   2. `code` CLI on PATH and the user hasn't opted out: write a one-shot
+    #      sentinel containing the handoff prompt, open VS Code at this repo,
+    #      and exit. VS Code's runOn:folderOpen task picks up the sentinel and
+    #      hands off to claude inside the integrated terminal — so users get
+    #      the file tree, source control panel, and IDE around their session
+    #      instead of a bare Terminal.app. ELNORA_SKIP_VSCODE_HANDOFF=1 is
+    #      the user-facing escape hatch.
+    #
+    #   3. Fallback: claude in this shell (today's behavior). Triggered when
+    #      VS Code wasn't installed (ELNORA_SKIP_OPTIONAL_INSTALLS=1) or the
+    #      `code` shim couldn't be created (brew bin not writable, Cursor
+    #      instead of VS Code, etc.).
+    if [ "${TERM_PROGRAM:-}" = "vscode" ]; then
+        echo "Already inside VS Code - starting Claude in this terminal."
+        echo "On first run, your browser will open to log into your Claude Pro/Max account."
+        echo ""
+        exec claude "$HANDOFF_PROMPT"
+    fi
+
+    if command -v code >/dev/null 2>&1 && [ "${ELNORA_SKIP_VSCODE_HANDOFF:-}" != "1" ]; then
+        VSCODE_DIR="$SCRIPT_DIR/.vscode"
+        SENTINEL="$VSCODE_DIR/.handoff-pending"
+        if [ -d "$VSCODE_DIR" ] && [ -f "$VSCODE_DIR/run-handoff.sh" ]; then
+            # The sentinel's content IS the prompt — keeps a single source of
+            # truth ($HANDOFF_PROMPT in this script). The helper reads, deletes,
+            # then exec's claude. Pre-delete on the helper side guarantees the
+            # task is one-shot even if claude crashes.
+            printf '%s' "$HANDOFF_PROMPT" > "$SENTINEL"
+            chmod +x "$VSCODE_DIR/run-handoff.sh" 2>/dev/null || true
+
+            echo "Opening VS Code - Claude will continue Phase 2 setup there."
+            echo ""
+            echo "VS Code will show TWO one-time prompts before the handoff fires."
+            echo "Click through both:"
+            echo "  1. 'Do you trust the authors of the files in this folder?'"
+            echo "       -> Click 'Yes, I trust the authors'"
+            echo "  2. 'This workspace has tasks ... that can launch processes"
+            echo "      automatically. Do you want to allow automatic tasks ...?'"
+            echo "       -> Click 'Allow'  (VS Code remembers this globally)"
+            echo ""
+            echo "Once both are approved, an integrated terminal opens with Claude"
+            echo "already on the Phase 2 prompt. On first run, your browser will"
+            echo "open to log into your Claude Pro/Max account."
+            echo ""
+            echo "If you click Disallow on the second prompt, or Claude does not"
+            echo "auto-start for any other reason, open a terminal in VS Code"
+            echo "(Ctrl+\` or View > Terminal) and run:"
+            echo "    bash .vscode/run-handoff.sh"
+            echo ""
+            echo "You can close this Terminal window once VS Code has loaded."
+            echo ""
+
+            # `code` returns immediately after asking the GUI to open the folder.
+            # If it fails (e.g. shim is stale and points at a removed app bundle),
+            # fall through to the in-terminal fallback below.
+            if code "$SCRIPT_DIR" >/dev/null 2>&1; then
+                exit 0
+            fi
+            echo "  [!] 'code' command failed - falling back to terminal handoff." >&2
+            rm -f "$SENTINEL"
+        fi
+    fi
+
     echo "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup."
     echo "On first run, your browser will open to log into your Claude Pro/Max account."
     echo ""

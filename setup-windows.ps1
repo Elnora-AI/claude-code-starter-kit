@@ -1567,6 +1567,82 @@ if ($claudeAvailable) {
         exit $rc
     }
 
+    # Interactive handoff. Three branches by environment:
+    #
+    #   1. Already inside VS Code's integrated terminal ($env:TERM_PROGRAM=vscode):
+    #      the user has the IDE on screen already, so just call claude in this
+    #      shell. No window-launching dance needed.
+    #
+    #   2. `code` CLI on PATH and the user hasn't opted out: write a one-shot
+    #      sentinel containing the handoff prompt, open VS Code at this repo,
+    #      and exit. VS Code's runOn:folderOpen task picks up the sentinel and
+    #      hands off to claude inside the integrated terminal — so users get
+    #      the file tree, source control panel, and IDE around their session
+    #      instead of a bare PowerShell window. ELNORA_SKIP_VSCODE_HANDOFF=1 is
+    #      the user-facing escape hatch.
+    #
+    #   3. Fallback: claude in this shell (today's behavior). Triggered when
+    #      VS Code wasn't installed (ELNORA_SKIP_OPTIONAL_INSTALLS=1) or the
+    #      `code` shim isn't on PATH yet.
+    if ($env:TERM_PROGRAM -eq "vscode") {
+        Write-Host "Already inside VS Code - starting Claude in this terminal." -ForegroundColor White
+        Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
+        Write-Host ""
+        & claude $HandoffPrompt
+        exit $LASTEXITCODE
+    }
+
+    $codeAvailable = Get-Command code -ErrorAction SilentlyContinue
+    if ($codeAvailable -and $env:ELNORA_SKIP_VSCODE_HANDOFF -ne "1") {
+        $vscodeDir = Join-Path $scriptDir ".vscode"
+        $sentinel  = Join-Path $vscodeDir ".handoff-pending"
+        $helper    = Join-Path $vscodeDir "run-handoff.ps1"
+        if ((Test-Path -LiteralPath $vscodeDir) -and (Test-Path -LiteralPath $helper)) {
+            # The sentinel's content IS the prompt — single source of truth
+            # lives in $HandoffPrompt above. The helper reads, deletes, then
+            # invokes claude. BOM-less UTF-8 to keep Get-Content -Raw clean.
+            [System.IO.File]::WriteAllText($sentinel, $HandoffPrompt, [System.Text.UTF8Encoding]::new($false))
+
+            Write-Host "Opening VS Code - Claude will continue Phase 2 setup there." -ForegroundColor White
+            Write-Host ""
+            Write-Host "VS Code will show TWO one-time prompts before the handoff fires."
+            Write-Host "Click through both:"
+            Write-Host "  1. 'Do you trust the authors of the files in this folder?'"
+            Write-Host "       -> Click 'Yes, I trust the authors'"
+            Write-Host "  2. 'This workspace has tasks ... that can launch processes"
+            Write-Host "      automatically. Do you want to allow automatic tasks ...?'"
+            Write-Host "       -> Click 'Allow'  (VS Code remembers this globally)"
+            Write-Host ""
+            Write-Host "Once both are approved, an integrated terminal opens with Claude"
+            Write-Host "already on the Phase 2 prompt. On first run, your browser will"
+            Write-Host "open to log into your Claude Pro/Max account."
+            Write-Host ""
+            Write-Host "If you click Disallow on the second prompt, or Claude does not"
+            Write-Host "auto-start for any other reason, open a terminal in VS Code"
+            Write-Host "(Ctrl+`` or View > Terminal) and run:"
+            Write-Host "    powershell -ExecutionPolicy Bypass -File .vscode\run-handoff.ps1"
+            Write-Host ""
+            Write-Host "You can close this PowerShell window once VS Code has loaded."
+            Write-Host ""
+
+            # `code` (code.cmd) returns immediately after asking the GUI to open
+            # the folder. Wrap in try/catch so a stale shim falls through to the
+            # in-terminal fallback rather than aborting the script.
+            $codeLaunched = $false
+            try {
+                & code $scriptDir | Out-Null
+                if ($LASTEXITCODE -eq 0) { $codeLaunched = $true }
+            } catch {
+                Write-Host "  [!] 'code' command failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+            if ($codeLaunched) {
+                exit 0
+            }
+            Write-Host "  [!] Falling back to terminal handoff." -ForegroundColor Yellow
+            Remove-Item -LiteralPath $sentinel -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     Write-Host "Starting Claude - it will read INSTALL_FOR_AGENTS.md and finish setup." -ForegroundColor White
     Write-Host "On first run, your browser will open to log into your Claude Pro/Max account." -ForegroundColor White
     Write-Host ""
