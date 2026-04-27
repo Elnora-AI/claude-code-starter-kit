@@ -29,7 +29,7 @@ agents and plugins. The Elnora pieces are optional.
 curl -fsSL https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.sh | bash
 ```
 
-**Windows:** open PowerShell (Start key, type `PowerShell`):
+**Windows:** open **PowerShell** (Start key, type `PowerShell`) — not Command Prompt / cmd:
 
 ```powershell
 irm https://raw.githubusercontent.com/Elnora-AI/elnora-starter-kit/main/install.ps1 | iex
