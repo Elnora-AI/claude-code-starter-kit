@@ -120,6 +120,26 @@ jobs:
           } > "$KIT/.elnora-starter-kit-marker"
           echo "  Wrote $KIT/.elnora-starter-kit-marker (sha256=$sha)"
 
+      - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
+        # The agent in headless mode is NOT allowed to write under .claude/
+        # paths (sensitive-paths guard fires there even with bypassPermissions).
+        # The harness writes the kb config the agent would otherwise have
+        # produced. Mirrors handoff-e2e.yml's matching step. The rsync above
+        # excludes .claude/knowledge-base.local.md (it's gitignored anyway),
+        # so the agent never sees one — its job is verify-only. Without this
+        # step, assert.sh's KB existence check fails 100% of the time.
+        run: |
+          KIT="$HOME/Documents/elnora-starter-kit"
+          mkdir -p "$KIT/.claude"
+          {
+            echo '---'
+            echo "vault_path: $HOME/Documents/test-vault"
+            echo '---'
+            echo ''
+            echo '# Knowledge Base Settings (headless test harness)'
+          } > "$KIT/.claude/knowledge-base.local.md"
+          echo "  Wrote $KIT/.claude/knowledge-base.local.md"
+
       - name: Run install.sh (full one-liner chain)
         # install.sh -> setup-mac.sh -> claude -p (headless because env is set)
         # -> Phase 2 -> HANDOFF_COMPLETE. install.sh's /dev/tty redirect now
@@ -250,6 +270,24 @@ jobs:
           $content = "version: 1`ncreated: $now`ninstall_for_agents_sha256: $hash`n"
           [System.IO.File]::WriteAllText($markerPath, $content, [System.Text.UTF8Encoding]::new($false))
           Write-Host "  Wrote $markerPath (sha256=$hash)"
+
+      - name: Pre-stage .claude/knowledge-base.local.md (no agent writes to .claude/)
+        # See matching macOS step + handoff-e2e.yml for the full rationale.
+        # Headless agent is blocked from writing under .claude/, so the
+        # harness places the kb config it would have produced. Without this
+        # step, assert.ps1's KB existence check fails 100% of the time.
+        shell: pwsh
+        run: |
+          $kit = Join-Path $env:USERPROFILE "Documents\elnora-starter-kit"
+          $claudeDir = Join-Path $kit ".claude"
+          New-Item -ItemType Directory -Force -Path $claudeDir | Out-Null
+          # Forward slashes in vault_path are intentional — the kb config
+          # doc says they work everywhere and avoid YAML escaping.
+          $vaultPath = ($env:USERPROFILE -replace '\\','/') + "/Documents/test-vault"
+          $kbContent = "---`nvault_path: $vaultPath`n---`n`n# Knowledge Base Settings (headless test harness)`n"
+          $kbPath = Join-Path $claudeDir "knowledge-base.local.md"
+          [System.IO.File]::WriteAllText($kbPath, $kbContent, [System.Text.UTF8Encoding]::new($false))
+          Write-Host "  Wrote $kbPath"
 
       - name: Run install.ps1 (full one-liner chain)
         shell: pwsh

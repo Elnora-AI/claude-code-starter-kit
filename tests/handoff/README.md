@@ -40,7 +40,7 @@ You need two API keys. Paste them into GitHub repo secrets:
 
 | Secret name | Where to get it | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys | Set a low monthly budget cap on the key in the Anthropic console so a runaway test can't spike the bill (~$1-3 per run on Sonnet). |
+| `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys | Set a low monthly budget cap on the key in the Anthropic console so a runaway test can't spike the bill (measured at ~$0.45-0.55 per OS on current Sonnet pricing — but cap the key anyway). |
 | `ELNORA_API_KEY_TEST` | https://platform.elnora.ai/settings → API Keys | Use a **dedicated test account**, not your personal one. Every run hits `elnora whoami` and `elnora doctor`. |
 
 **For local testing** (running the headless mode on your own Mac), paste
@@ -117,9 +117,15 @@ the end.
 
 ## Cost & frequency
 
-- ~30-40 Claude turns per run, mostly Sonnet-class work (file reads, edits,
-  bash commands).
-- Roughly **$1-3 per run per OS** at current pricing.
+- ~20-30 Claude turns per run, mostly Sonnet-class work (file reads, edits,
+  bash commands). Cache hit rate is consistently >93%.
+- Measured at **~$0.45-0.55 per run per OS** on current Sonnet pricing
+  (handoff-e2e + bootstrap-e2e together: ~$2 per full both-OS audit).
+  This is a floor, not a guarantee — if `INSTALL_FOR_AGENTS.md` grows or
+  the agent's flow has to recover from new errors, expect drift upward.
+- Total agent wall time: ~2-3 min per OS (so a both-OS run finishes in
+  ~5 min total, parallel). The job-level "15-25 min" timeout is a
+  generous ceiling, not the expected runtime.
 - No schedule, no auto-trigger. Run it when:
   - You changed `setup-mac.sh`, `setup-windows.ps1`, or `INSTALL_FOR_AGENTS.md`.
   - You want a confidence check before a release.

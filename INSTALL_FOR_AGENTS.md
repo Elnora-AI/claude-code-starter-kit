@@ -37,7 +37,13 @@ mode, follow these adjustments:
   `.claude/knowledge-base.local.md` for you before this script runs. Your
   job in headless mode is **verify only — do not write `.claude/`
   paths**:
-  1. Confirm `.claude/knowledge-base.local.md` exists.
+  1. Confirm `.claude/knowledge-base.local.md` exists. **The path is
+     relative to the project root (your CWD)**, not `~/.claude/`. Don't
+     check `~/.claude/knowledge-base.local.md` first — that's the
+     user-level Claude Code dir (credentials, MCP cache), and it never
+     contains the kb config. Check `./.claude/knowledge-base.local.md`
+     directly. (You're in the kit directory; if `INSTALL_FOR_AGENTS.md`
+     is in your CWD, so is `.claude/`.)
   2. Read it and confirm `vault_path:` resolves to a real directory
      (`~/Documents/test-vault/` should exist with a few files inside).
   3. If either check fails, surface the failure in the transcript and do
@@ -62,9 +68,15 @@ mode, follow these adjustments:
        starting at `### First-run setup` (inclusive) up to but **not
        including** `### Reading the config`, and `new_string` set to
        `""` (empty).
-    3. Verify with two `Bash` calls:
-       `grep -c '### First-run setup' CLAUDE.md` must print `0`, and
-       `grep -c '### Reading the config' CLAUDE.md` must print `1`.
+    3. Verify with one `Bash` call using `;` (NOT `&&`) between the greps:
+       `grep -c '### First-run setup' CLAUDE.md ; grep -c '### Reading the config' CLAUDE.md`
+       must print `0` then `1`. **Don't chain with `&&`** — `grep -c` returns
+       exit 1 when the count is 0, which short-circuits `&&` and skips the
+       second grep, costing you a wasted retry turn. Also: on Windows, pass
+       paths as `CLAUDE.md` (relative) or `'C:/Users/.../CLAUDE.md'`
+       (forward slashes, single-quoted) — backslashes get eaten by Git Bash
+       as escape sequences (`\U`, `\D`, `\e` …) and grep will report
+       "No such file or directory".
 
     If either anchor isn't found in step 1, **stop** and surface the
     error — do not invent a workaround, do not skip the self-clean.
@@ -91,13 +103,18 @@ mode, follow these adjustments:
 
       ```
       export GH_TOKEN="$ELNORA_HANDOFF_GH_TOKEN"
+      gh auth setup-git
       ```
 
       Don't run `gh auth login --with-token` — the test PAT may lack the
       `read:org` scope that command validates, even though the token is
-      fully functional for repo creation. With `GH_TOKEN` exported, every
-      subsequent `gh` and `git` push call inherits the token via gh's
-      built-in credential helper.
+      fully functional for repo creation. With `GH_TOKEN` exported, `gh`
+      itself is authenticated immediately. The follow-up `gh auth
+      setup-git` wires git to use gh's credential helper for HTTPS URLs.
+      Skip it and step 6c.5's `git fetch origin` will fail with "could
+      not read Username for https://github.com" — `GH_TOKEN` alone
+      doesn't configure git's credential.helper on a fresh shell, only
+      gh's own HTTP layer.
 
       Then run the 6b verification gates as written. Do **not** embed
       the token in the remote URL
@@ -173,13 +190,27 @@ mode, follow these adjustments:
 
 ## Phase 2 — finish setup
 
+> **Don't preemptively read `RECOVERY.md`.** It's a triage doc for when
+> Phase 1 failed — useless context for the happy path. Only consult it
+> if you find a `FAILED:` marker in step 1 below or if a step here
+> errors out. Reading it upfront wastes ~5 KB of cache for nothing.
+
 ### 1. Read the install log
 
 ```
-tail -100 ~/claude-starter-install.log
+grep -E "FAILED:|^error:" ~/claude-starter-install.log || echo "No FAILED markers"
+tail -30 ~/claude-starter-install.log
 ```
 
-(On Windows: `Get-Content $env:USERPROFILE\claude-starter-install.log -Tail 100`.)
+(On Windows: `Select-String -Pattern "FAILED:|^error:" $env:USERPROFILE\claude-starter-install.log` then `Get-Content $env:USERPROFILE\claude-starter-install.log -Tail 30`.)
+
+> **Do NOT use the Read tool on the install log, and do NOT `tail -100`
+> the whole thing either.** On macOS the log carries Homebrew bottle-pour
+> ANSI noise that pushes a 100-line tail past 80 KB — large enough that
+> the Bash tool itself spills the result to disk and you waste 1-2 turns
+> `cat`ing the persisted file. Filter first (`grep` for failures), then
+> only look at a small `tail -30` for the install summary. That's enough
+> to know if anything broke.
 
 Tell the user: "I'm reading the install log to see what got installed and
 whether anything failed." Note any `FAILED` markers — you'll fix them in step 2.
@@ -526,9 +557,11 @@ now? It's the recommended way to keep notes that I can read."**
      `python3` write gives the agent a generic file-mutation primitive
      that bypasses tool-level guards). If either anchor isn't found,
      stop and report it — do not silently proceed. After the edit,
-     verify with `grep -c '### First-run setup' CLAUDE.md` (must print
-     `0`) and `grep -c '### Reading the config' CLAUDE.md` (must print
-     `1`). Headless mode uses the exact same approach (see Step 8 in
+     verify with one `Bash` call using `;` (NOT `&&`):
+     `grep -c '### First-run setup' CLAUDE.md ; grep -c '### Reading the config' CLAUDE.md`
+     (must print `0` then `1`). `&&` would short-circuit when the first
+     grep returns 0 occurrences (exit 1) and skip the second check.
+     Headless mode uses the exact same approach (see Step 8 in
      the headless-mode block at the top of this file).
 - **No, skip** → tell the user "No problem. Whenever you want to set this up
   later, just ask me 'help me set up my knowledge base' and I'll walk through
