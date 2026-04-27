@@ -37,7 +37,13 @@ mode, follow these adjustments:
   `.claude/knowledge-base.local.md` for you before this script runs. Your
   job in headless mode is **verify only — do not write `.claude/`
   paths**:
-  1. Confirm `.claude/knowledge-base.local.md` exists.
+  1. Confirm `.claude/knowledge-base.local.md` exists. **The path is
+     relative to the project root (your CWD)**, not `~/.claude/`. Don't
+     check `~/.claude/knowledge-base.local.md` first — that's the
+     user-level Claude Code dir (credentials, MCP cache), and it never
+     contains the kb config. Check `./.claude/knowledge-base.local.md`
+     directly. (You're in the kit directory; if `INSTALL_FOR_AGENTS.md`
+     is in your CWD, so is `.claude/`.)
   2. Read it and confirm `vault_path:` resolves to a real directory
      (`~/Documents/test-vault/` should exist with a few files inside).
   3. If either check fails, surface the failure in the transcript and do
@@ -183,6 +189,11 @@ mode, follow these adjustments:
 ---
 
 ## Phase 2 — finish setup
+
+> **Don't preemptively read `RECOVERY.md`.** It's a triage doc for when
+> Phase 1 failed — useless context for the happy path. Only consult it
+> if you find a `FAILED:` marker in step 1 below or if a step here
+> errors out. Reading it upfront wastes ~5 KB of cache for nothing.
 
 ### 1. Read the install log
 

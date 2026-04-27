@@ -1207,15 +1207,27 @@ if command -v claude >/dev/null 2>&1; then
         # Phase 2 averages ~40-50 turns when GitHub bootstrap (gh auth + repo
         # create + push + verify) runs in full, so 80 leaves ~30-turn
         # headroom for transient retries (network, tool errors).
+        #
+        # The trailing `> /dev/null` is load-bearing: this entire script is
+        # wrapped in `exec > >(tee "$LOG_FILE")` at the top, so anything
+        # that reaches the script's stdout also lands in
+        # ~/claude-starter-install.log. Without /dev/null the JSONL stream
+        # passes through `tee` to the script's stdout AND gets appended to
+        # the install log — bloating it from ~3KB to ~180KB and embedding
+        # the agent's own conversation (including the literal text
+        # "FAILED:" inside INSTALL_FOR_AGENTS.md) where the next agent's
+        # `grep FAILED:` will hit it as false positives. Send JSONL to
+        # transcript only; the workflow has a separate "Show handoff
+        # transcript" step for live debugging.
         claude -p "$HANDOFF_PROMPT" \
             --permission-mode bypassPermissions \
             --output-format stream-json \
             --verbose \
             --max-turns 80 \
-          | tee "$TRANSCRIPT"
+          | tee "$TRANSCRIPT" > /dev/null
         rc=${PIPESTATUS[0]}
         echo ""
-        echo "claude -p exited with code $rc (transcript saved to $TRANSCRIPT)"
+        echo "claude -p exited with code $rc (transcript saved to $TRANSCRIPT, $(wc -l < "$TRANSCRIPT" | tr -d ' ') events)"
         exit "$rc"
     fi
 
