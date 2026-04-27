@@ -32,8 +32,12 @@ knowledge base, GitHub repo) stands on its own.
 
 ## Requirements
 
-- macOS or Windows 10/11
+- A computer running macOS or Windows 10/11 — one you control and have
+  administrator rights on (the install needs to run privileged commands
+  like Homebrew/Xcode CLT on macOS or WinGet on Windows).
 - Active Claude Pro or Max subscription ([upgrade](https://claude.com/upgrade))
+- GitHub account ([sign up](https://github.com/signup)) — used in Phase 2 to
+  create your private starter-kit repo.
 - Elnora API key ([platform.elnora.ai/settings](https://platform.elnora.ai/settings))
   — only needed if you want the Elnora CLI/MCP flow. Skip it if you're using
   the kit purely as a Claude Code starter template; the rest of the install
